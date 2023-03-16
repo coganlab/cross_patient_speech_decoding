@@ -10,7 +10,7 @@ Adapted from code by Kumar Duraivel
 from keras.models import Model
 from keras.layers import Reshape
 
-from rnn_model_components import (linear_cnn_1D_module,
+from .rnn_model_components import (linear_cnn_1D_module,
                                   linear_cnn_3D_module,
                                   lstm_encoder_decoder_module,
                                   gru_encoder_decoder_module)
@@ -70,17 +70,15 @@ def lstm_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
         (Functional, Functional, Functional): Encoder-decoder training model,
             encoder inference model, decoder inference model
     """
-    cnn_inputs, cnn_layer = linear_cnn_3D_module(n_input_time,
-                                                 n_input_x,
-                                                 n_input_y,
-                                                 n_filters,
-                                                 filter_size,
-                                                 reg_lambda)
+    cnn_inputs, cnn_layer = linear_cnn_3D_module(n_input_time, n_input_x,
+                                                 n_input_y, n_filters,
+                                                 filter_size, reg_lambda)
     cnn_output = cnn_layer(cnn_inputs)
     cnn_shape = cnn_layer.output_shape
-    reshape_layer = Reshape((cnn_shape[2], cnn_shape[3]),
+    reshape_layer = Reshape((cnn_shape[1] * cnn_shape[2], cnn_shape[3], 
+                             cnn_shape[4]),
                             input_shape=(cnn_shape[1], cnn_shape[2],
-                                         cnn_shape[3]))
+                                         cnn_shape[3], cnn_shape[4]))
     encoder_inputs = reshape_layer(cnn_output)
     training_model, inf_enc_model, inf_dec_model = lstm_encoder_decoder_module(
                                   encoder_inputs, n_output, n_units,
