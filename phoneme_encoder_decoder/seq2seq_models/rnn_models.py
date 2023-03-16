@@ -10,10 +10,10 @@ Adapted from code by Kumar Duraivel
 from keras.models import Model
 from keras.layers import Reshape
 
-from .rnn_model_components import (linear_cnn_1D_module,
-                                  linear_cnn_3D_module,
-                                  lstm_encoder_decoder_module,
-                                  gru_encoder_decoder_module)
+from .rnn_model_components import (linear_cnn_1D_module, linear_cnn_3D_module,
+                                  lstm_enc_dec_module, gru_enc_dec_module,
+                                  bi_lstm_enc_dec_module,
+                                  bi_gru_enc_dec_module)
 
 
 def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
@@ -38,7 +38,7 @@ def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
                                                   n_input_channel, n_filters,
                                                   filter_size, reg_lambda)
     encoder_inputs = cnn_layers(cnn_inputs)
-    training_model, inf_enc_model, inf_dec_model = lstm_encoder_decoder_module(
+    training_model, inf_enc_model, inf_dec_model = lstm_enc_dec_module(
                                   encoder_inputs, n_output, n_units,
                                   reg_lambda)
 
@@ -75,20 +75,22 @@ def lstm_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
                                                  filter_size, reg_lambda)
     cnn_output = cnn_layer(cnn_inputs)
     cnn_shape = cnn_layer.output_shape
-    reshape_layer = Reshape((cnn_shape[1] * cnn_shape[2], cnn_shape[3], 
+    reshape_layer = Reshape((cnn_shape[1] * cnn_shape[2] * cnn_shape[3], 
                              cnn_shape[4]),
                             input_shape=(cnn_shape[1], cnn_shape[2],
                                          cnn_shape[3], cnn_shape[4]))
     encoder_inputs = reshape_layer(cnn_output)
-    training_model, inf_enc_model, inf_dec_model = lstm_encoder_decoder_module(
+    training_model, inf_enc_model, inf_dec_model = lstm_enc_dec_module(
                                   encoder_inputs, n_output, n_units,
                                   reg_lambda)
 
     # add cnn layer to beginning of encoder-decoder LSTM
     training_model = Model([cnn_inputs, training_model.input[1]],
                            training_model([encoder_inputs,
-                                           training_model.input[1]]))
-    inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs))
+                                           training_model.input[1]]),
+                           name='training_model_final')
+    inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs),
+                          name='inf_enc_model_final')
 
     return training_model, inf_enc_model, inf_dec_model
 
@@ -115,7 +117,7 @@ def gru_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
                                                   n_input_channel, n_filters,
                                                   filter_size, reg_lambda)
     encoder_inputs = cnn_layers(cnn_inputs)
-    training_model, inf_enc_model, inf_dec_model = gru_encoder_decoder_module(
+    training_model, inf_enc_model, inf_dec_model = gru_enc_dec_module(
                                   encoder_inputs, n_output, n_units,
                                   reg_lambda)
 
@@ -151,7 +153,7 @@ def gru_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
                                                   n_input_y, n_filters,
                                                   filter_size, reg_lambda)
     encoder_inputs = cnn_layers(cnn_inputs)
-    training_model, inf_enc_model, inf_dec_model = gru_encoder_decoder_module(
+    training_model, inf_enc_model, inf_dec_model = gru_enc_dec_module(
                                   encoder_inputs, n_output, n_units,
                                   reg_lambda)
 
