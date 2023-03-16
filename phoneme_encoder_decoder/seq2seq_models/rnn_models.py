@@ -82,6 +82,8 @@ def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
                                     reg_lambda)
 
     # add cnn layer to beginning of encoder-decoder LSTM
+    # training sequence input (training_model.input[1]) still separate input
+    # from CNN input
     training_model = Model([cnn_inputs, training_model.input[1]],
                            training_model([encoder_inputs,
                                            training_model.input[1]]),
@@ -130,6 +132,8 @@ def lstm_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
                                     reg_lambda)
 
     # add cnn layer to beginning of encoder-decoder LSTM
+    # training sequence input (training_model.input[1]) still separate input
+    # from CNN input
     training_model = Model([cnn_inputs, training_model.input[1]],
                            training_model([encoder_inputs,
                                            training_model.input[1]]),
@@ -177,6 +181,8 @@ def gru_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
                                     reg_lambda)
 
     # add cnn layer to beginning of encoder-decoder LSTM
+    # training sequence input (training_model.input[1]) still separate input
+    # from CNN input
     training_model = Model([cnn_inputs, training_model.input[1]],
                            training_model([encoder_inputs,
                                            training_model.input[1]]),
@@ -225,6 +231,8 @@ def gru_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
                                     reg_lambda)
 
     # add cnn layer to beginning of encoder-decoder LSTM
+    # training sequence input (training_model.input[1]) still separate input
+    # from CNN input
     training_model = Model([cnn_inputs, training_model.input[1]],
                            training_model([encoder_inputs,
                                            training_model.input[1]]),
