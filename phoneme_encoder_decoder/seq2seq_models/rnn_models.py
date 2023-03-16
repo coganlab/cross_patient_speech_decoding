@@ -30,14 +30,13 @@ def reshape_3d_cnn(cnn_input, cnn_layer):
         KerasTensor: Reshaped output of 3D CNN layer (output shape:
             (batch, depth, width * height * channels))
     """
+    cnn_output = cnn_layer(cnn_input)
     cnn_shape = cnn_layer.output_shape
     w_dim, h_dim, d_dim, c_dim = cnn_shape[1:]
-    cnn_output = cnn_layer(cnn_input)
 
     # reorder from (batch, width, height, depth, channels) to
     # (batch, depth, width, height, channels)
-    permute_layer = Permute((d_dim, w_dim, h_dim, c_dim),
-                            input_shape=cnn_shape[1:])
+    permute_layer = Permute((3, 1, 2, 4), input_shape=cnn_shape[1:])
 
     # reshape from (batch, depth, width, height, channels) to
     # (batch, depth, width * height * channels)
