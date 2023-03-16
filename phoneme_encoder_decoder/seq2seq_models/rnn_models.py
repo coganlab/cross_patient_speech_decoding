@@ -47,7 +47,7 @@ def reshape_3d_cnn(cnn_input, cnn_layer):
 
 
 def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
-                     filter_size, n_units, reg_lambda):
+                     filter_size, n_units, reg_lambda, bidir=False):
     """Creates a joint 1D CNN-LSTM  model by adding a 1D convolutional layer to
     the front of an encoder-decoder LSTM model.
 
@@ -59,30 +59,42 @@ def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
         filter_size (int): Size (and stride) of convolutional filters.
         n_units (int): Number of units in LSTM layers.
         reg_lambda (float): L2 regularization parameter.
+        bidir (bool): If true, use bidirectional encoder-decoder model. Else,
+            use regular encoder-decoder model. Default: False.
 
     Returns:
         (Functional, Functional, Functional): Encoder-decoder training model,
             encoder inference model, decoder inference model
     """
+    # create CNN feature extraction component
     cnn_inputs, cnn_layers = linear_cnn_1D_module(n_input_time,
                                                   n_input_channel, n_filters,
                                                   filter_size, reg_lambda)
     encoder_inputs = cnn_layers(cnn_inputs)
-    training_model, inf_enc_model, inf_dec_model = lstm_enc_dec_module(
+
+    # create encoder-decoder component
+    if bidir:
+        training_model, inf_enc_model, inf_dec_model = bi_lstm_enc_dec_module(
                                   encoder_inputs, n_output, n_units,
                                   reg_lambda)
+    else:
+        training_model, inf_enc_model, inf_dec_model = lstm_enc_dec_module(
+                                    encoder_inputs, n_output, n_units,
+                                    reg_lambda)
 
     # add cnn layer to beginning of encoder-decoder LSTM
     training_model = Model([cnn_inputs, training_model.input[1]],
                            training_model([encoder_inputs,
-                                           training_model.input[1]]))
-    inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs))
+                                           training_model.input[1]]),
+                           name='training_model_final')
+    inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs),
+                          name='inf_enc_model_final')
 
     return training_model, inf_enc_model, inf_dec_model
 
 
 def lstm_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
-                     n_filters, filter_size, n_units, reg_lambda):
+                     n_filters, filter_size, n_units, reg_lambda, bidir=False):
     """Creates a joint 3D CNN-LSTM  model by adding a 3D convolutional layer to
     the front of an encoder-decoder LSTM model.
 
@@ -95,18 +107,28 @@ def lstm_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
         filter_size (int): Size (and stride) of convolutional filters.
         n_units (int): Number of units in LSTM layers.
         reg_lambda (float): L2 regularization parameter.
+        bidir (bool): If true, use bidirectional encoder-decoder model. Else,
+            use regular encoder-decoder model. Default: False.
 
     Returns:
         (Functional, Functional, Functional): Encoder-decoder training model,
             encoder inference model, decoder inference model
     """
+    # create CNN feature extraction component
     cnn_inputs, cnn_layer = linear_cnn_3D_module(n_input_time, n_input_x,
                                                  n_input_y, n_filters,
                                                  filter_size, reg_lambda)
     encoder_inputs = reshape_3d_cnn(cnn_inputs, cnn_layer)
-    training_model, inf_enc_model, inf_dec_model = lstm_enc_dec_module(
+
+    # create encoder-decoder component
+    if bidir:
+        training_model, inf_enc_model, inf_dec_model = bi_lstm_enc_dec_module(
                                   encoder_inputs, n_output, n_units,
                                   reg_lambda)
+    else:
+        training_model, inf_enc_model, inf_dec_model = lstm_enc_dec_module(
+                                    encoder_inputs, n_output, n_units,
+                                    reg_lambda)
 
     # add cnn layer to beginning of encoder-decoder LSTM
     training_model = Model([cnn_inputs, training_model.input[1]],
@@ -120,7 +142,7 @@ def lstm_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
 
 
 def gru_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
-                    filter_size, n_units, reg_lambda):
+                    filter_size, n_units, reg_lambda, bidir=False):
     """Creates a joint 1D CNN-GRU  model by adding a 1D convolutional layer to
     the front of an encoder-decoder GRU model.
 
@@ -132,30 +154,42 @@ def gru_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
         filter_size (int): Size (and stride) of convolutional filters.
         n_units (int): Number of units in LSTM layers.
         reg_lambda (float): L2 regularization parameter.
+        bidir (bool): If true, use bidirectional encoder-decoder model. Else,
+            use regular encoder-decoder model. Default: False.
 
     Returns:
         (Functional, Functional, Functional): Encoder-decoder training model,
             encoder inference model, decoder inference model
     """
+    # create CNN feature extraction component
     cnn_inputs, cnn_layers = linear_cnn_1D_module(n_input_time,
                                                   n_input_channel, n_filters,
                                                   filter_size, reg_lambda)
     encoder_inputs = cnn_layers(cnn_inputs)
-    training_model, inf_enc_model, inf_dec_model = gru_enc_dec_module(
+
+    # create encoder-decoder component
+    if bidir:
+        training_model, inf_enc_model, inf_dec_model = bi_gru_enc_dec_module(
                                   encoder_inputs, n_output, n_units,
                                   reg_lambda)
+    else:
+        training_model, inf_enc_model, inf_dec_model = gru_enc_dec_module(
+                                    encoder_inputs, n_output, n_units,
+                                    reg_lambda)
 
     # add cnn layer to beginning of encoder-decoder LSTM
     training_model = Model([cnn_inputs, training_model.input[1]],
                            training_model([encoder_inputs,
-                                           training_model.input[1]]))
-    inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs))
+                                           training_model.input[1]]),
+                           name='training_model_final')
+    inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs),
+                          name='inf_enc_model_final')
 
     return training_model, inf_enc_model, inf_dec_model
 
 
 def gru_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
-                    n_filters, filter_size, n_units, reg_lambda):
+                    n_filters, filter_size, n_units, reg_lambda, bidir=False):
     """Creates a joint 3D CNN-GRU  model by adding a 3D convolutional layer to
     the front of an encoder-decoder GRU model.
 
@@ -168,23 +202,35 @@ def gru_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
         filter_size (int): Size (and stride) of convolutional filters.
         n_units (int): Number of units in LSTM layers.
         reg_lambda (float): L2 regularization parameter.
+        bidir (bool): If true, use bidirectional encoder-decoder model. Else,
+            use regular encoder-decoder model. Default: False.
 
     Returns:
         (Functional, Functional, Functional): Encoder-decoder training model,
             encoder inference model, decoder inference model
     """
+    # create CNN feature extraction component
     cnn_inputs, cnn_layers = linear_cnn_3D_module(n_input_time, n_input_x,
                                                   n_input_y, n_filters,
                                                   filter_size, reg_lambda)
     encoder_inputs = reshape_3d_cnn(cnn_inputs, cnn_layers)
-    training_model, inf_enc_model, inf_dec_model = gru_enc_dec_module(
+
+    # create encoder-decoder component
+    if bidir:
+        training_model, inf_enc_model, inf_dec_model = bi_gru_enc_dec_module(
                                   encoder_inputs, n_output, n_units,
                                   reg_lambda)
+    else:
+        training_model, inf_enc_model, inf_dec_model = gru_enc_dec_module(
+                                    encoder_inputs, n_output, n_units,
+                                    reg_lambda)
 
     # add cnn layer to beginning of encoder-decoder LSTM
     training_model = Model([cnn_inputs, training_model.input[1]],
                            training_model([encoder_inputs,
-                                           training_model.input[1]]))
-    inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs))
+                                           training_model.input[1]]),
+                           name='training_model_final')
+    inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs),
+                          name='inf_enc_model_final')
 
     return training_model, inf_enc_model, inf_dec_model
