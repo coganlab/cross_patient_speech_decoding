@@ -7,7 +7,7 @@ Adapted from code by Kumar Duraivel
 """
 
 from keras.models import Model
-from keras.layers import (Dense, LSTM, GRU, Input, Conv1D, Conv3D, 
+from keras.layers import (Dense, LSTM, GRU, Input, Conv1D, Conv3D,
                           Bidirectional, Average)
 from keras.regularizers import L2
 
@@ -93,11 +93,11 @@ def lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
 
     # combine encoder and decoder into training model
     training_model = Model([encoder_inputs, decoder_inputs], decoder_outputs,
-                           name='training_model_initial')
+                           name='training_initial')
 
     # define inference encoder
     inf_enc_model = Model(encoder_inputs, encoder_states,
-                          name='inf_enc_model_initial')
+                          name='inf_enc_initial')
 
     # define inference decoder
     decoder_state_input_h = Input(shape=(n_units,))
@@ -110,7 +110,7 @@ def lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     decoder_outputs = decoder_dense(decoder_outputs)
     inf_dec_model = Model([decoder_inputs] + decoder_states_inputs,
                           [decoder_outputs] + decoder_states,
-                          name='inf_dec_model')
+                          name='inf_dec')
 
     return training_model, inf_enc_model, inf_dec_model
 
@@ -131,7 +131,7 @@ def gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
             encoder inference model, decoder inference model
     """
     # define training encoder
-    encoder = GRU(n_units, return_state=True, 
+    encoder = GRU(n_units, return_state=True,
                   kernel_regularizer=L2(reg_lambda),
                   recurrent_regularizer=L2(reg_lambda),
                   bias_regularizer=L2(reg_lambda))
@@ -151,11 +151,11 @@ def gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
 
     # combine encoder and decoder into training model
     model = Model([encoder_inputs, decoder_inputs], decoder_outputs,
-                  name='training_model_initial')
+                  name='training_initial')
 
     # define inference encoder
     inf_enc_model = Model(encoder_inputs, encoder_states,
-                          name='inf_enc_model_initial')
+                          name='inf_enc_initial')
 
     # define inference decoder
     decoder_state_input_h = Input(shape=(n_units,))
@@ -166,7 +166,7 @@ def gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     decoder_outputs = decoder_dense(decoder_outputs)
     inf_dec_model = Model([decoder_inputs] + decoder_states_inputs,
                           [decoder_outputs] + decoder_states,
-                          name='inf_dec_model')
+                          name='inf_dec')
 
     return model, inf_enc_model, inf_dec_model
 
@@ -191,8 +191,8 @@ def bi_lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
                                  kernel_regularizer=L2(reg_lambda),
                                  recurrent_regularizer=L2(reg_lambda),
                                  bias_regularizer=L2(reg_lambda)))
-    (encoder_outputs, forward_state_h, forward_state_c, backward_state_h, 
-    backward_state_c) = encoder(encoder_inputs)
+    (encoder_outputs, forward_state_h, forward_state_c, backward_state_h,
+     backward_state_c) = encoder(encoder_inputs)
     state_h = Average()([forward_state_h, backward_state_h])
     state_c = Average()([forward_state_c, backward_state_c])
     encoder_states = [state_h, state_c]
@@ -210,11 +210,11 @@ def bi_lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
 
     # combine encoder and decoder into training model
     training_model = Model([encoder_inputs, decoder_inputs], decoder_outputs,
-                           name='training_model_initial')
+                           name='training_initial')
 
     # define inference encoder
     inf_enc_model = Model(encoder_inputs, encoder_states,
-                          name='inf_enc_model_initial')
+                          name='inf_enc_initial')
 
     # define inference decoder
     decoder_state_input_h = Input(shape=(n_units,))
@@ -227,7 +227,7 @@ def bi_lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     decoder_outputs = decoder_dense(decoder_outputs)
     inf_dec_model = Model([decoder_inputs] + decoder_states_inputs,
                           [decoder_outputs] + decoder_states,
-                          name='inf_dec_model')
+                          name='inf_dec')
 
     return training_model, inf_enc_model, inf_dec_model
 
@@ -249,9 +249,9 @@ def bi_gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     """
     # define training encoder
     encoder = Bidirectional(GRU(n_units, return_state=True,
-                                 kernel_regularizer=L2(reg_lambda),
-                                 recurrent_regularizer=L2(reg_lambda),
-                                 bias_regularizer=L2(reg_lambda)))
+                                kernel_regularizer=L2(reg_lambda),
+                                recurrent_regularizer=L2(reg_lambda),
+                                bias_regularizer=L2(reg_lambda)))
     _, forward_state_h, backward_state_h = encoder(encoder_inputs)
     state_h = Average()([forward_state_h, backward_state_h])
     encoder_states = [state_h]
@@ -269,11 +269,11 @@ def bi_gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
 
     # combine encoder and decoder into training model
     model = Model([encoder_inputs, decoder_inputs], decoder_outputs,
-                  name='training_model_initial')
+                  name='trainingl_initial')
 
     # define inference encoder
     inf_enc_model = Model(encoder_inputs, encoder_states,
-                          name='inf_enc_model_initial')
+                          name='inf_encl_initial')
 
     # define inference decoder
     decoder_state_input_h = Input(shape=(n_units,))
@@ -284,6 +284,6 @@ def bi_gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     decoder_outputs = decoder_dense(decoder_outputs)
     inf_dec_model = Model([decoder_inputs] + decoder_states_inputs,
                           [decoder_outputs] + decoder_states,
-                          name='inf_dec_model')
+                          name='inf_dec')
 
     return model, inf_enc_model, inf_dec_model
