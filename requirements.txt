@@ -1,0 +1,11 @@
+keras
+keras-tuner
+numpy
+scipy
+matplotlib
+scikit-learn
+pandas
+jupyter
+tensorflow
+tensorflow_probability
+h5py
