@@ -8,12 +8,42 @@ Adapted from code by Kumar Duraivel
 
 
 from keras.models import Model
-from keras.layers import Reshape
+from keras.layers import Reshape, Permute
 
 from .rnn_model_components import (linear_cnn_1D_module, linear_cnn_3D_module,
-                                  lstm_enc_dec_module, gru_enc_dec_module,
-                                  bi_lstm_enc_dec_module,
-                                  bi_gru_enc_dec_module)
+                                   lstm_enc_dec_module, gru_enc_dec_module,
+                                   bi_lstm_enc_dec_module,
+                                   bi_gru_enc_dec_module)
+
+
+def reshape_3d_cnn(cnn_input, cnn_layer):
+    """Reshapes outputs of a 3D Cnn layer to a 2D tensor for input to
+    encoder-decoder RNN model. Presverses depth/timestep dimension and combines
+    other dimensions with dimension permutation before reshaping.
+
+    Args:
+        cnn_input (kerasTensor): Input to 3D CNN layer.
+        cnn_layer (Conv3D): 3D CNN layer (output shape:
+            (batch, width, height, depth, channels))
+
+    Returns:
+        KerasTensor: Reshaped output of 3D CNN layer (output shape:
+            (batch, depth, width * height * channels))
+    """
+    cnn_shape = cnn_layer.output_shape
+    w_dim, h_dim, d_dim, c_dim = cnn_shape[1:]
+    cnn_output = cnn_layer(cnn_input)
+
+    # reorder from (batch, width, height, depth, channels) to
+    # (batch, depth, width, height, channels)
+    permute_layer = Permute((d_dim, w_dim, h_dim, c_dim),
+                            input_shape=cnn_shape[1:])
+
+    # reshape from (batch, depth, width, height, channels) to
+    # (batch, depth, width * height * channels)
+    reshape_layer = Reshape((d_dim, w_dim * h_dim * c_dim),
+                            input_shape=cnn_shape[1:])
+    return reshape_layer(permute_layer(cnn_output))
 
 
 def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
@@ -73,13 +103,7 @@ def lstm_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
     cnn_inputs, cnn_layer = linear_cnn_3D_module(n_input_time, n_input_x,
                                                  n_input_y, n_filters,
                                                  filter_size, reg_lambda)
-    cnn_output = cnn_layer(cnn_inputs)
-    cnn_shape = cnn_layer.output_shape
-    reshape_layer = Reshape((cnn_shape[1] * cnn_shape[2] * cnn_shape[3], 
-                             cnn_shape[4]),
-                            input_shape=(cnn_shape[1], cnn_shape[2],
-                                         cnn_shape[3], cnn_shape[4]))
-    encoder_inputs = reshape_layer(cnn_output)
+    encoder_inputs = reshape_3d_cnn(cnn_inputs, cnn_layer)
     training_model, inf_enc_model, inf_dec_model = lstm_enc_dec_module(
                                   encoder_inputs, n_output, n_units,
                                   reg_lambda)
@@ -152,7 +176,7 @@ def gru_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
     cnn_inputs, cnn_layers = linear_cnn_3D_module(n_input_time, n_input_x,
                                                   n_input_y, n_filters,
                                                   filter_size, reg_lambda)
-    encoder_inputs = cnn_layers(cnn_inputs)
+    encoder_inputs = reshape_3d_cnn(cnn_inputs, cnn_layers)
     training_model, inf_enc_model, inf_dec_model = gru_enc_dec_module(
                                   encoder_inputs, n_output, n_units,
                                   reg_lambda)
