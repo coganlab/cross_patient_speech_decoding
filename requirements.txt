@@ -9,3 +9,7 @@ jupyter
 tensorflow
 tensorflow_probability
 h5py
+pytest
+pytest-pycodestyle
+pytest-cov
+
