@@ -20,10 +20,10 @@ def get_high_gamma_data(filename):
     mat_data = load_mat_data(filename)
 
     # shape = trials x channel_x x channel_y x timepoints
-    hg_stack = get_feature_data(mat_data, 'ieegGammaSeries')
+    hg_trace = get_feature_data(mat_data, 'hgTraceSig')
     # shape = trials x timepoints x channels
-    hg_image = get_feature_data(mat_data, 'ieegGammaImage')
+    hg_map = get_feature_data(mat_data, 'hgMap')
     # shape = trials x 3 (3 length phoneme sequence)
-    phon_labels = get_feature_data(mat_data, 'phonemeIndClass')
+    phon_labels = get_feature_data(mat_data, 'phonSeqLabels')
 
-    return hg_stack, hg_image, phon_labels
+    return hg_trace, hg_map, phon_labels
