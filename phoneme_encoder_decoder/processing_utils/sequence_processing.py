@@ -79,3 +79,12 @@ def predict_gru_sequence(inf_enc, inf_dec, source, n_steps, n_output):
         target_seq = y_hat
 
     return np.array(output)
+
+
+def predict_sequence(inf_enc, inf_dec, source, n_steps, n_output):
+    if inf_dec.name[-4:] == 'lstm':
+        return predict_lstm_sequence(inf_enc, inf_dec, source, n_steps,
+                                     n_output)
+    elif inf_dec.name[-3:] == 'gru':
+        return predict_gru_sequence(inf_enc, inf_dec, source, n_steps,
+                                    n_output)
