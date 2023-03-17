@@ -6,7 +6,7 @@ Adapted from code by Kumar Duraivel
 """
 
 import numpy as np
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import KFold
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.models import load_model
 
@@ -83,11 +83,11 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
     # save initial weights to reset model for each fold
     init_train_w = train_model.get_weights()
 
-    n_output = inf_dec.output_shape[-1]  # number of output classes
-    seq_len = y.shape[-1]  # length of output sequence
+    n_output = inf_dec.output_shape[0][-1]  # number of output classes
+    seq_len = y.shape[1]  # length of output sequence
 
     # define k-fold cross validation
-    cv = StratifiedKFold(n_splits=num_folds, shuffle=True)
+    cv = KFold(n_splits=num_folds, shuffle=True)
 
     # create callbacks for early stopping (model checkpoint included to get
     # best model weights since early stopping returns model after patience
@@ -101,11 +101,12 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
 
     # dictionary for tracking models and history of each fold
     models = {'train': [], 'inf_enc': [], 'inf_dec': []}
-    histories = {'accuracy': [], 'loss': [], 'val_accracy': [], 'val_loss': []}
+    histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
+                 'val_loss': []}
 
     # cv training
     y_pred_all, y_test_all = [], []
-    for train_ind, test_ind in cv.split(X, y):
+    for train_ind, test_ind in cv.split(X):
         X_train, X_test = X[train_ind], X[test_ind]
         X_prior_train, X_prior_test = X_prior[train_ind], X_prior[test_ind]
         y_train, y_test = y[train_ind], y[test_ind]
@@ -131,8 +132,7 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
         histories['val_accuracy'].append(history.history['val_accuracy'])
         histories['val_loss'].append(history.history['val_loss'])
 
-        target = predict_sequence(inf_enc, inf_dec, X_test, X_prior_test,
-                                  seq_len, n_output)
+        target = predict_sequence(inf_enc, inf_dec, X_test, seq_len, n_output)
         y_test_all.append(np.ravel(one_hot_decode_sequence(y_test)))
         y_pred_all.append(np.ravel(one_hot_decode_sequence(target)))
 
