@@ -67,14 +67,18 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
             validation loss performance. Defaults to True.
 
     Returns:
-        (Functional, Dict): Trained encoder-decoder model,
-            dictionary containing training performance history for each fold,
-            predicted labels by fold, and true labels by fold.
-            Dictionary structure is:
-                {'accuracy': [fold1_acc, fold2_acc, ...],
-                'loss': [fold1_loss, fold2_loss, ...],
-                'val_accuracy': [fold1_val_acc, fold2_val_acc, ...],
-                'val_loss': [fold1_val_loss, fold2_val_loss, ...]}
+        (Dict, Dict, ndarray, ndarray): Dictionary containing trained models
+            by fold, dictionary containing training performance history for
+            each fold, predicted labels by fold, and true labels by fold.
+            Dictionary structures are:
+            -models = {'train': [fold1_train_model, fold2_train_model, ...],
+                       'inf_enc': [fold1_inf_enc, fold2_inf_enc, ...],
+                       'inf_dec': [fold1_inf_dec, fold2_inf_dec, ...]}
+
+            -histories = {'accuracy': [fold1_acc, fold2_acc, ...],
+                          'loss': [fold1_loss, fold2_loss, ...],
+                          'val_accuracy': [fold1_val_acc, fold2_val_acc, ...],
+                          'val_loss': [fold1_val_loss, fold2_val_loss, ...]}
     """
     # save initial weights to reset model for each fold
     init_train_w = train_model.get_weights()
@@ -95,7 +99,8 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
                              save_best_only=True)
         cb = [es, mc]
 
-    # dictionary for tracking history of each fold
+    # dictionary for tracking models and history of each fold
+    models = {'train': [], 'inf_enc': [], 'inf_dec': []}
     histories = {'accuracy': [], 'loss': [], 'val_accracy': [], 'val_loss': []}
 
     # cv training
@@ -117,14 +122,18 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
         # TODO - figure out how to get inference weights from saved model
         # saved_model = load_model('best_model.h5')
 
-        target = predict_sequence(inf_enc, inf_dec, X_test, X_prior_test,
-                                  seq_len, n_output)
-        y_test_all.append(np.ravel(one_hot_decode_sequence(y_test)))
-        y_pred_all.append(np.ravel(one_hot_decode_sequence(target)))
+        models['train'].append(train_model)
+        models['inf_enc'].append(inf_enc)
+        models['inf_dec'].append(inf_dec)
 
         histories['accuracy'].append(history.history['accuracy'])
         histories['loss'].append(history.history['loss'])
         histories['val_accuracy'].append(history.history['val_accuracy'])
         histories['val_loss'].append(history.history['val_loss'])
 
-    return train_model, histories, np.array(y_pred_all), np.array(y_test_all)
+        target = predict_sequence(inf_enc, inf_dec, X_test, X_prior_test,
+                                  seq_len, n_output)
+        y_test_all.append(np.ravel(one_hot_decode_sequence(y_test)))
+        y_pred_all.append(np.ravel(one_hot_decode_sequence(target)))
+
+    return models, histories, np.array(y_pred_all), np.array(y_test_all)
