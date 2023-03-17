@@ -8,24 +8,24 @@ import numpy as np
 from keras.utils import to_categorical
 
 
-def phoneme_padding(phon_input, n_output):
+def pad_sequence_teacher_forcing(seq_input, n_output):
 
     pad_one_hot, seq_one_hot, pad_labels, seq_labels = [], [], [], []
-    for phon_seq in phon_input:  # for each observation/trial
+    for seq in seq_input:  # for each observation/trial
 
         # shift sequence right by one and insert 0 at beginning
         # e.g. [1, 2, 3] -> [0, 1, 2]
-        pad_seq = [0] + phon_seq[:-1]
+        pad_seq = [0] + seq[:-1]
 
         # one-hot encode regular and padded sequences
-        tar_encoded = to_categorical(phon_seq, num_classes=n_output)
+        tar_encoded = to_categorical(seq, num_classes=n_output)
         tar_pad_encoded = to_categorical(pad_seq, num_classes=n_output)
 
         # save sequence data for all observations/trials
         pad_one_hot.append(tar_pad_encoded)
         seq_one_hot.append(tar_encoded)
         pad_labels.append(pad_seq)
-        seq_labels.append(phon_seq)
+        seq_labels.append(seq)
 
     return (np.array(pad_one_hot), np.array(seq_one_hot), np.array(pad_labels),
             np.array(seq_labels))
