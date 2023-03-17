@@ -15,7 +15,7 @@ def pad_sequence_teacher_forcing(seq_input, n_output):
 
         # shift sequence right by one and insert 0 at beginning
         # e.g. [1, 2, 3] -> [0, 1, 2]
-        pad_seq = [0] + seq[:-1]
+        pad_seq = np.insert(seq[:-1], 0, 0)
 
         # one-hot encode regular and padded sequences
         tar_encoded = to_categorical(seq, num_classes=n_output)
