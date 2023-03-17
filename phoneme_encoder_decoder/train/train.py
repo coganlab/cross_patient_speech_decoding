@@ -68,7 +68,8 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
 
     Returns:
         (Functional, Dict): Trained encoder-decoder model,
-            dictionary containing training performance history for each fold.
+            dictionary containing training performance history for each fold,
+            predicted labels by fold, and true labels by fold.
             Dictionary structure is:
                 {'accuracy': [fold1_acc, fold2_acc, ...],
                 'loss': [fold1_loss, fold2_loss, ...],
@@ -118,12 +119,12 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
 
         target = predict_sequence(inf_enc, inf_dec, X_test, X_prior_test,
                                   seq_len, n_output)
-        y_test_all.append(one_hot_decode_sequence(y_test))
-        y_pred_all.append(one_hot_decode_sequence(target))
+        y_test_all.append(np.ravel(one_hot_decode_sequence(y_test)))
+        y_pred_all.append(np.ravel(one_hot_decode_sequence(target)))
 
         histories['accuracy'].append(history.history['accuracy'])
         histories['loss'].append(history.history['loss'])
         histories['val_accuracy'].append(history.history['val_accuracy'])
         histories['val_loss'].append(history.history['val_loss'])
 
-    return train_model, histories
+    return train_model, histories, np.array(y_pred_all), np.array(y_test_all)
