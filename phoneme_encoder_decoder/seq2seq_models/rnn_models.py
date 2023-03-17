@@ -16,6 +16,12 @@ from .rnn_model_components import (linear_cnn_1D_module, linear_cnn_3D_module,
                                    bi_gru_enc_dec_module)
 
 
+LSTM_TRAINING_NAME = 'training_lstm_final'
+LSTM_INF_ENC_NAME = 'inf_enc_lstm_final'
+GRU_TRAINING_NAME = 'training_gru_final'
+GRU_INF_ENC_NAME = 'inf_enc_gru_final'
+
+
 def reshape_3d_cnn(cnn_input, cnn_layer):
     """Reshapes outputs of a 3D Cnn layer to a 2D tensor for input to
     encoder-decoder RNN model. Presverses depth/timestep dimension and combines
@@ -58,8 +64,8 @@ def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
         filter_size (int): Size (and stride) of convolutional filters.
         n_units (int): Number of units in LSTM layers.
         reg_lambda (float): L2 regularization parameter.
-        bidir (bool): If true, use bidirectional encoder-decoder model. Else,
-            use regular encoder-decoder model. Default: False.
+        bidir (bool, optional): If true, use bidirectional encoder-decoder
+            model. Else, use regular encoder-decoder model. Defaults to False.
 
     Returns:
         (Functional, Functional, Functional): Encoder-decoder training model,
@@ -87,9 +93,9 @@ def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
     training_model = Model([cnn_inputs, training_model.input[1]],
                            training_model([encoder_inputs,
                                            training_model.input[1]]),
-                           name='training_model_final')
+                           name=LSTM_TRAINING_NAME)
     inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs),
-                          name='inf_enc_model_final')
+                          name=LSTM_INF_ENC_NAME)
 
     return training_model, inf_enc_model, inf_dec_model
 
@@ -108,8 +114,8 @@ def lstm_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
         filter_size (int): Size (and stride) of convolutional filters.
         n_units (int): Number of units in LSTM layers.
         reg_lambda (float): L2 regularization parameter.
-        bidir (bool): If true, use bidirectional encoder-decoder model. Else,
-            use regular encoder-decoder model. Default: False.
+        bidir (bool, optional): If true, use bidirectional encoder-decoder
+            model. Else, use regular encoder-decoder model. Defaults to False.
 
     Returns:
         (Functional, Functional, Functional): Encoder-decoder training model,
@@ -137,9 +143,9 @@ def lstm_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
     training_model = Model([cnn_inputs, training_model.input[1]],
                            training_model([encoder_inputs,
                                            training_model.input[1]]),
-                           name='training_model_final')
+                           name=LSTM_TRAINING_NAME)
     inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs),
-                          name='inf_enc_model_final')
+                          name=LSTM_INF_ENC_NAME)
 
     return training_model, inf_enc_model, inf_dec_model
 
@@ -157,8 +163,8 @@ def gru_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
         filter_size (int): Size (and stride) of convolutional filters.
         n_units (int): Number of units in LSTM layers.
         reg_lambda (float): L2 regularization parameter.
-        bidir (bool): If true, use bidirectional encoder-decoder model. Else,
-            use regular encoder-decoder model. Default: False.
+        bidir (bool, optional): If true, use bidirectional encoder-decoder
+            model. Else, use regular encoder-decoder model. Defaults to False.
 
     Returns:
         (Functional, Functional, Functional): Encoder-decoder training model,
@@ -186,9 +192,9 @@ def gru_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
     training_model = Model([cnn_inputs, training_model.input[1]],
                            training_model([encoder_inputs,
                                            training_model.input[1]]),
-                           name='training_model_final')
+                           name=GRU_TRAINING_NAME)
     inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs),
-                          name='inf_enc_model_final')
+                          name=GRU_INF_ENC_NAME)
 
     return training_model, inf_enc_model, inf_dec_model
 
@@ -207,8 +213,8 @@ def gru_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
         filter_size (int): Size (and stride) of convolutional filters.
         n_units (int): Number of units in LSTM layers.
         reg_lambda (float): L2 regularization parameter.
-        bidir (bool): If true, use bidirectional encoder-decoder model. Else,
-            use regular encoder-decoder model. Default: False.
+        bidir (bool, optional): If true, use bidirectional encoder-decoder
+            model. Else, use regular encoder-decoder model. Defaults to False.
 
     Returns:
         (Functional, Functional, Functional): Encoder-decoder training model,
@@ -236,8 +242,8 @@ def gru_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
     training_model = Model([cnn_inputs, training_model.input[1]],
                            training_model([encoder_inputs,
                                            training_model.input[1]]),
-                           name='training_model_final')
+                           name=GRU_TRAINING_NAME)
     inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs),
-                          name='inf_enc_model_final')
+                          name=GRU_INF_ENC_NAME)
 
     return training_model, inf_enc_model, inf_dec_model
