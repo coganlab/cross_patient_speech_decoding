@@ -1,4 +1,5 @@
-"""Processing functions for sequence data in seq2seq model training.
+"""
+Processing functions for sequence data in seq2seq model training.
 
 Author: Zac Spalding
 Adapted from code by Kumar Duraivel
