@@ -10,7 +10,7 @@ from sklearn.model_selection import KFold
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.models import load_model
 
-from processing_utils.sequence_processing import (predict_sequence,
+from processing_utils.sequence_processing import (seq2seq_predict_sequence,
                                                   one_hot_decode_sequence)
 
 
@@ -67,7 +67,7 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
             validation loss performance. Defaults to True.
 
     Returns:
-        (Dict, Dict, ndarray, ndarray): Dictionary containing trained models
+        (Dict, Dict, list, list): Dictionary containing trained models
             by fold, dictionary containing training performance history for
             each fold, predicted labels by fold, and true labels by fold.
             Dictionary structures are:
@@ -107,6 +107,7 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
     # cv training
     y_pred_all, y_test_all = [], []
     for train_ind, test_ind in cv.split(X):
+        print(f'========== Fold {len(models["train"]) + 1} ==========')
         X_train, X_test = X[train_ind], X[test_ind]
         X_prior_train, X_prior_test = X_prior[train_ind], X_prior[test_ind]
         y_train, y_test = y[train_ind], y[test_ind]
@@ -132,8 +133,9 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
         histories['val_accuracy'].append(history.history['val_accuracy'])
         histories['val_loss'].append(history.history['val_loss'])
 
-        target = predict_sequence(inf_enc, inf_dec, X_test, seq_len, n_output)
+        target = seq2seq_predict_sequence(inf_enc, inf_dec, X_test, seq_len,
+                                          n_output)
         y_test_all.append(np.ravel(one_hot_decode_sequence(y_test)))
         y_pred_all.append(np.ravel(one_hot_decode_sequence(target)))
 
-    return models, histories, np.array(y_pred_all), np.array(y_test_all)
+    return models, histories, y_pred_all, y_test_all
