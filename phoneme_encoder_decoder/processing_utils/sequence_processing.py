@@ -39,6 +39,41 @@ def one_hot_decode_sequence(encoded_seq):
     return [one_hot_decode(encoded_element) for encoded_element in encoded_seq]
 
 
+def seq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
+    state = inf_enc.predict(source, verbose=verbose)
+
+    # generate initial sequence (one-hot encoding corresponding to 0)
+    target_seq = np.zeros((1, 1, n_output))
+    target_seq[0, 0, 0] = 1
+
+    output = []
+    for _ in range(n_steps):  # iterate over time steps
+        # predict next element
+        pred_tup = inf_dec.predict([target_seq] + state, verbose=verbose)
+        y_hat = pred_tup[0]
+        # get both states for lstm or single state for gru
+        state = list(pred_tup[1:])  
+        output.append(y_hat[0, 0, :])
+        # update decoder states
+        # update target sequence
+        target_seq = y_hat
+
+    return np.array(output)
+
+
+def seq2seq_predict_sequence(inf_enc, inf_dec, source, n_steps, n_output,
+                             verbose=0):
+    output = []
+    # iterate over observations
+    for i in range(source.shape[0]):
+        # add batch dimension for input match
+        curr_trial = np.expand_dims(source[i,:,:], axis=0)
+        # appends n_steps probability distributions for each observation
+        output.append(seq2seq_predict(inf_enc, inf_dec, curr_trial, n_steps,
+                                      n_output, verbose=verbose))
+    return np.array(output)
+
+
 def predict_lstm_sequence(inf_enc, inf_dec, source, n_steps, n_output):
 
     state = inf_enc.predict(source)
