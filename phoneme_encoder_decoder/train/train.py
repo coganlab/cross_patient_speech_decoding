@@ -10,8 +10,8 @@ from sklearn.model_selection import KFold
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.models import load_model
 
-from processing_utils.sequence_processing import (seq2seq_predict_sequence,
-                                                  one_hot_decode_sequence)
+from processing_utils.sequence_processing import (seq2seq_predict_batch,
+                                                  one_hot_decode_batch)
 
 
 def shuffle_weights(model, weights=None):
@@ -133,9 +133,9 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
         histories['val_accuracy'].append(history.history['val_accuracy'])
         histories['val_loss'].append(history.history['val_loss'])
 
-        target = seq2seq_predict_sequence(inf_enc, inf_dec, X_test, seq_len,
+        target = seq2seq_predict_batch(inf_enc, inf_dec, X_test, seq_len,
                                           n_output)
-        y_test_all.append(np.ravel(one_hot_decode_sequence(y_test)))
-        y_pred_all.append(np.ravel(one_hot_decode_sequence(target)))
+        y_test_all.append(np.ravel(one_hot_decode_batch(y_test)))
+        y_pred_all.append(np.ravel(one_hot_decode_batch(target)))
 
     return models, histories, y_pred_all, y_test_all
