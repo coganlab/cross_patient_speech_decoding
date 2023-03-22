@@ -6,6 +6,7 @@ Adapted from code by Kumar Duraivel
 """
 
 import numpy as np
+import tensorflow as tf
 from sklearn.model_selection import KFold
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from keras.models import load_model
@@ -106,36 +107,37 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
 
     # cv training
     y_pred_all, y_test_all = [], []
-    for train_ind, test_ind in cv.split(X):
-        print(f'========== Fold {len(models["train"]) + 1} ==========')
-        X_train, X_test = X[train_ind], X[test_ind]
-        X_prior_train, X_prior_test = X_prior[train_ind], X_prior[test_ind]
-        y_train, y_test = y[train_ind], y[test_ind]
+    with tf.device('/device:GPU:0'):
+        for train_ind, test_ind in cv.split(X):
+            print(f'========== Fold {len(models["train"]) + 1} ==========')
+            X_train, X_test = X[train_ind], X[test_ind]
+            X_prior_train, X_prior_test = X_prior[train_ind], X_prior[test_ind]
+            y_train, y_test = y[train_ind], y[test_ind]
 
-        # reset model weights for current fold (also resets associated
-        # inference weights)
-        shuffle_weights(train_model, weights=init_train_w)
+            # reset model weights for current fold (also resets associated
+            # inference weights)
+            shuffle_weights(train_model, weights=init_train_w)
 
-        history = train_model.fit([X_train, X_prior_train], y_train,
-                                  batch_size=batch_size, epochs=epochs,
-                                  validation_data=([X_test, X_prior_test],
-                                                   y_test),
-                                  callbacks=cb)
-        # TODO - figure out how to get inference weights from saved model
-        # saved_model = load_model('best_model.h5')
+            history = train_model.fit([X_train, X_prior_train], y_train,
+                                      batch_size=batch_size, epochs=epochs,
+                                      validation_data=([X_test, X_prior_test],
+                                                       y_test),
+                                      callbacks=cb)
+            # TODO - figure out how to get inference weights from saved model
+            # saved_model = load_model('best_model.h5')
 
-        models['train'].append(train_model)
-        models['inf_enc'].append(inf_enc)
-        models['inf_dec'].append(inf_dec)
+            models['train'].append(train_model)
+            models['inf_enc'].append(inf_enc)
+            models['inf_dec'].append(inf_dec)
 
-        histories['accuracy'].append(history.history['accuracy'])
-        histories['loss'].append(history.history['loss'])
-        histories['val_accuracy'].append(history.history['val_accuracy'])
-        histories['val_loss'].append(history.history['val_loss'])
+            histories['accuracy'].append(history.history['accuracy'])
+            histories['loss'].append(history.history['loss'])
+            histories['val_accuracy'].append(history.history['val_accuracy'])
+            histories['val_loss'].append(history.history['val_loss'])
 
-        target = seq2seq_predict_batch(inf_enc, inf_dec, X_test, seq_len,
-                                          n_output)
-        y_test_all.append(np.ravel(one_hot_decode_batch(y_test)))
-        y_pred_all.append(np.ravel(one_hot_decode_batch(target)))
+            target = seq2seq_predict_batch(inf_enc, inf_dec, X_test, seq_len,
+                                           n_output)
+            y_test_all.append(np.ravel(one_hot_decode_batch(y_test)))
+            y_pred_all.append(np.ravel(one_hot_decode_batch(target)))
 
     return models, histories, y_pred_all, y_test_all
