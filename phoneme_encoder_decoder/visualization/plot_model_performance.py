@@ -30,7 +30,8 @@ def create_CV_history_df(cv_histories):
     return df
 
 
-def plot_accuracy_loss(cv_histories):
+def plot_accuracy_loss(cv_histories, save_fig=False,
+                       fig_path="../../figures/loss_accuracy.png"):
     train_loss_df = create_CV_history_df(cv_histories)
     _, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     sns.lineplot(data=train_loss_df, x='epoch', y='loss', ax=ax1, color='blue',
@@ -51,3 +52,6 @@ def plot_accuracy_loss(cv_histories):
     ax2.set_title('RNN Accuracy')
     ax2.legend()
     plt.show()
+
+    if save_fig:
+        plt.savefig(fig_path)
