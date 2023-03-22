@@ -12,7 +12,7 @@ from keras.utils import to_categorical
 def pad_sequence_teacher_forcing(seq_input, n_output):
     """Pad sequence for use in teacher forcing training of RNN. Sequence is
     shifted right by one, 0 is inserted at the beginning, and the last element.
-    is removed (to preserve length of sequence with 0 token at front). The 
+    is removed (to preserve length of sequence with 0 token at front). The
     padded sequence and original sequence are one-hot encoded.
 
     Args:
@@ -23,8 +23,7 @@ def pad_sequence_teacher_forcing(seq_input, n_output):
         (ndarray, ndarray, ndarray, ndarray): One-hot encoded padded sequence,
             one-hot encoded original sequence, padded sequence, original
             sequence.
-    """    
-
+    """
     pad_one_hot, seq_one_hot, pad_labels, seq_labels = [], [], [], []
     for seq in seq_input:  # for each observation/trial
 
@@ -47,7 +46,7 @@ def pad_sequence_teacher_forcing(seq_input, n_output):
 
 
 def one_hot_decode(encoded_element):
-    """Decodes a sequence of one-hot encoded vectors into a sequence of 
+    """Decodes a sequence of one-hot encoded vectors into a sequence of
     integers. Uses argmax to determine index of 1 in each one-hot vector.
 
     Args:
@@ -56,7 +55,7 @@ def one_hot_decode(encoded_element):
 
     Returns:
         list: Decoded sequence of integers. Shape = (sequence length).
-    """    
+    """
     return [np.argmax(vector) for vector in encoded_element]
 
 
@@ -69,16 +68,16 @@ def one_hot_decode_batch(encoded_batch):
             (n_trials, sequence length, cardinality of output space)
 
     Returns:
-        list: Batch of decoded sequences of integers. Shape = (n_trials, 
+        list: Batch of decoded sequences of integers. Shape = (n_trials,
             sequence length)
-    """    
+    """
     return [one_hot_decode(enc_seq) for enc_seq in encoded_batch]
 
 
 def seq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
     """Predicts sequence of outputs using inference encoder and decoder models.
     Single trial feature data is passed to inference encoder to generate states
-    and states are passed to inference decoder to generate output sequence. 
+    and states are passed to inference decoder to generate output sequence.
     Agnostic to RNN models (LSTM or GRU) as long as inference decoder predict()
     method return format is "output, (states)".
 
@@ -95,8 +94,10 @@ def seq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
     Returns:
         ndarray: Predicted sequence of output probabilities. Shape = (n_steps,
             n_output)
-    """    
+    """
     state = inf_enc.predict(source, verbose=verbose)
+    if not isinstance(state, list):
+        state = [state]  # convert to list for compatibility with decoder (gru)
 
     # generate initial sequence (one-hot encoding corresponding to 0)
     target_seq = np.zeros((1, 1, n_output))
@@ -108,7 +109,7 @@ def seq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
         pred_tup = inf_dec.predict([target_seq] + state, verbose=verbose)
         y_hat = pred_tup[0]
         # update both states for lstm or single state for gru
-        state = list(pred_tup[1:])  
+        state = list(pred_tup[1:])
         output.append(y_hat[0, 0, :])
         # update target sequence
         target_seq = y_hat
@@ -117,8 +118,8 @@ def seq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
 
 
 def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
-                             verbose=0):
-    """Predicts batch of sequences of outputs using inference encoder and 
+                          verbose=0):
+    """Predicts batch of sequences of outputs using inference encoder and
     decoder models. Calls seq2seq_predict() for each observation in batch.
 
     Args:
@@ -132,14 +133,14 @@ def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
             Defaults to 0.
 
     Returns:
-        ndarray: Batch of predicted sequence of output probabilities. Shape = 
+        ndarray: Batch of predicted sequence of output probabilities. Shape =
             (n_trials, n_steps, n_output)
-    """    
+    """
     output = []
     # iterate over observations
     for i in range(source.shape[0]):
         # add batch dimension for input match
-        curr_trial = np.expand_dims(source[i,:,:], axis=0)
+        curr_trial = np.expand_dims(source[i, :, :], axis=0)
         # appends n_steps probability distributions for each observation
         output.append(seq2seq_predict(inf_enc, inf_dec, curr_trial, n_steps,
                                       n_output, verbose=verbose))
