@@ -8,7 +8,7 @@ seaborn
 scikit-learn
 pandas
 jupyter
-tensorflow
+tensorflow<2.11
 tensorflow_probability
 h5py
 pytest
