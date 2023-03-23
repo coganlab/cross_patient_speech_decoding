@@ -145,3 +145,18 @@ def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
         output.append(seq2seq_predict(inf_enc, inf_dec, curr_trial, n_steps,
                                       n_output, verbose=verbose))
     return np.array(output)
+
+
+def flatten_fold_preds(preds):
+    """Flattens a list of predictions from cross-validation folds into a single
+    array. Accounts for inhomogeneous amount of trials across folds.
+
+    Args:
+        preds (list): List of predictions from cross-validation folds. Shape =
+            (folds, trials, sequence length)
+
+    Returns:
+        ndarray: Array of predictions concatenated across folds. Shape =
+            (total trials * sequence length)
+    """
+    return np.hstack([np.ravel(pred) for pred in preds])
