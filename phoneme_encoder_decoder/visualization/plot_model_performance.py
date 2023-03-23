@@ -8,11 +8,54 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
+def extend_list_to_length(lst, length):
+    """Extends a list to a specified length by repeating the last element.
+    Raises error if list is already longer than specified length.
+
+    Args:
+        lst (list): List to be extended.
+        length (int): Length to extend list to.
+
+    Returns:
+        list: Extended list.
+    """
+    if len(lst) > length:
+        raise ValueError("List length is greater than specified length.")
+    else:
+        lst.extend([lst[-1]] * (length - len(lst)))
+    return lst
+
+
+def extend_history_lists(histories, epochs=100):
+    """Extends model history lists to a specified length by repeating the last
+    element. Use to ensure all folds have the same number of epochs when number
+    of epochs can vary from Early Stopping.
+
+    Args:
+        histories (dict): Dictionary of model history lists.
+        epochs (int): Length to extend lists to (i.e. max number of epochs).
+
+    Returns:
+        dict: Dictionary of extended model history lists in same format as
+            input dictionary.
+    """
+    history_copy = histories.copy()
+
+    # extend histories to specified length
+    for key in histories.keys():
+        for fold in range(len(histories[key])):
+            ext_list = extend_list_to_length(histories[key][fold], epochs)
+            history_copy[key][fold] = ext_list
+    return history_copy
+
+
 def remove_duplicate_cols(df):
     return df.loc[:, ~df.columns.duplicated()].copy()
 
 
-def create_CV_history_df(cv_histories):
+def create_CV_history_df(cv_histories, epochs=100):
+    extend_history_lists(cv_histories, epochs=epochs)
+
     df = pd.DataFrame()
     for key in cv_histories.keys():
         key_arr = np.array(cv_histories[key])
@@ -30,9 +73,9 @@ def create_CV_history_df(cv_histories):
     return df
 
 
-def plot_accuracy_loss(cv_histories, save_fig=False,
+def plot_accuracy_loss(cv_histories, epochs=100, save_fig=False,
                        fig_path="../../figures/loss_accuracy.png"):
-    train_loss_df = create_CV_history_df(cv_histories)
+    train_loss_df = create_CV_history_df(cv_histories, epochs=epochs)
     _, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     sns.lineplot(data=train_loss_df, x='epoch', y='loss', ax=ax1, color='blue',
                  label='Train')
