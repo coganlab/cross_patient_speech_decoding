@@ -8,11 +8,12 @@ Adapted from code by Kumar Duraivel
 import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import KFold
-from keras.callbacks import EarlyStopping, ModelCheckpoint
-from keras.models import load_model
+from keras.callbacks import EarlyStopping
+
 
 from processing_utils.sequence_processing import (seq2seq_predict_batch,
-                                                  one_hot_decode_batch)
+                                                  one_hot_decode_batch,
+                                                  flatten_fold_preds)
 
 
 def shuffle_weights(model, weights=None):
@@ -68,9 +69,10 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
             validation loss performance. Defaults to True.
 
     Returns:
-        (Dict, Dict, list, list): Dictionary containing trained models
+        (Dict, Dict, ndarray, ndarray): Dictionary containing trained models
             by fold, dictionary containing training performance history for
-            each fold, predicted labels by fold, and true labels by fold.
+            each fold, predicted labels across folds, and true labels across
+            folds.
             Dictionary structures are:
             -models = {'train': [fold1_train_model, fold2_train_model, ...],
                        'inf_enc': [fold1_inf_enc, fold2_inf_enc, ...],
@@ -95,10 +97,10 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
     # epochs, where performance may have started to decline)
     cb = None
     if early_stop:
-        es = EarlyStopping(monitor='val_loss', patience=50)
-        mc = ModelCheckpoint('best_model.h5', monitor='val_acc', mode='max',
-                             save_best_only=True)
-        cb = [es, mc]
+        # early stopping with patience = 1/10 of total epochs
+        es = EarlyStopping(monitor='val_loss', patience=int(epochs / 10),
+                           restore_best_weights=True)
+        cb = [es]
 
     # dictionary for tracking models and history of each fold
     models = {'train': [], 'inf_enc': [], 'inf_dec': []}
@@ -123,8 +125,6 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
                                       validation_data=([X_test, X_prior_test],
                                                        y_test),
                                       callbacks=cb)
-            # TODO - figure out how to get inference weights from saved model
-            # saved_model = load_model('best_model.h5')
 
             models['train'].append(train_model)
             models['inf_enc'].append(inf_enc)
@@ -137,7 +137,10 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
 
             target = seq2seq_predict_batch(inf_enc, inf_dec, X_test, seq_len,
                                            n_output)
-            y_test_all.append(np.ravel(one_hot_decode_batch(y_test)))
-            y_pred_all.append(np.ravel(one_hot_decode_batch(target)))
+            y_test_all.append(one_hot_decode_batch(y_test))
+            y_pred_all.append(one_hot_decode_batch(target))
+
+    y_pred_all = flatten_fold_preds(y_pred_all)
+    y_test_all = flatten_fold_preds(y_test_all)
 
     return models, histories, y_pred_all, y_test_all
