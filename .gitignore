@@ -1,5 +1,6 @@
 .vscode
 *.mat
+data/
 
 ##### Default Python gitignore #####
 
