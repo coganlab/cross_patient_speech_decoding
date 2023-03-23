@@ -100,15 +100,15 @@ def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
     return training_model, inf_enc_model, inf_dec_model
 
 
-def lstm_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
-                     n_filters, filter_size, n_units, reg_lambda, bidir=False):
+def lstm_3Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
+                     filter_size, n_units, reg_lambda, bidir=False):
     """Creates a joint 3D CNN-LSTM  model by adding a 3D convolutional layer to
     the front of an encoder-decoder LSTM model.
 
     Args:
         n_input_time (int): Number of timesteps.
-        n_input_x (int): Width of image (size of channel map x-dimension).
-        n_input_y (int): Height of image (size of channel map y-dimension).
+        n_input_channel (list(int)): Width and height of image (size of channel
+            map x and y dimensions). Format: [width, height]
         n_output (int): Cardinality of output space.
         n_filters (int): Number of convolutional filters.
         filter_size (int): Size (and stride) of convolutional filters.
@@ -121,6 +121,8 @@ def lstm_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
         (Functional, Functional, Functional): Encoder-decoder training model,
             encoder inference model, decoder inference model
     """
+    n_input_x, n_input_y = n_input_channel  # unpack image dimensions
+
     # create CNN feature extraction component
     cnn_inputs, cnn_layer = linear_cnn_3D_module(n_input_time, n_input_x,
                                                  n_input_y, n_filters,
@@ -199,15 +201,15 @@ def gru_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
     return training_model, inf_enc_model, inf_dec_model
 
 
-def gru_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
-                    n_filters, filter_size, n_units, reg_lambda, bidir=False):
+def gru_3Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
+                    filter_size, n_units, reg_lambda, bidir=False):
     """Creates a joint 3D CNN-GRU  model by adding a 3D convolutional layer to
     the front of an encoder-decoder GRU model.
 
     Args:
         n_input_time (int): Number of timesteps.
-        n_input_x (int): Width of image (size of channel map x-dimension).
-        n_input_y (int): Height of image (size of channel map y-dimension).
+        n_input_channel (list(int)): Width and height of image (size of channel
+            map x and y dimensions). Format: [width, height]
         n_output (int): Cardinality of output space.
         n_filters (int): Number of convolutional filters.
         filter_size (int): Size (and stride) of convolutional filters.
@@ -220,6 +222,8 @@ def gru_3Dcnn_model(n_input_time, n_input_x, n_input_y, n_output,
         (Functional, Functional, Functional): Encoder-decoder training model,
             encoder inference model, decoder inference model
     """
+    n_input_x, n_input_y = n_input_channel  # unpack image dimensions
+
     # create CNN feature extraction component
     cnn_inputs, cnn_layers = linear_cnn_3D_module(n_input_time, n_input_x,
                                                   n_input_y, n_filters,
