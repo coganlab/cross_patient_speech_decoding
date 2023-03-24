@@ -16,7 +16,7 @@ from processing_utils.sequence_processing import (seq2seq_predict_batch,
                                                   flatten_fold_preds)
 
 
-def shuffle_weights(model, weights=None):
+def shuffle_weights(model, weights=None, layer_idx=None):
     """Randomly permute the weights in `model`, or the given `weights`.
     This is a fast approximation of re-initializing the weights of a model.
     Assumes weights are distributed independently of the dimensions of the
@@ -33,11 +33,19 @@ def shuffle_weights(model, weights=None):
             Defaults to None.
     """
     if weights is None:
-        weights = model.get_weights()
+        if layer_idx is None:
+            weights = model.get_weights()
+        else:
+            weights = model.layers[layer_idx].get_weights()
+
     weights = [np.random.permutation(w.flat).reshape(w.shape) for w in weights]
     # Faster, but less random: only permutes along the first dimension
     # weights = [np.random.permutation(w) for w in weights]
-    model.set_weights(weights)
+
+    if layer_idx is None:
+        model.set_weights(weights)
+    else:
+        model.layers[layer_idx].set_weights(weights)
 
 
 def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
@@ -48,8 +56,7 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
     Uses stratified k-fold cross validation to train a seq2seq encoder-decoder
     model. Requires a training model, as well as inference encoder and decoder
     for predicting sequences. Model is trained with teacher forcing from padded
-    versions of the target sequences. *** EARLY STOPPING IS CURRENTLY NOT
-    IMPLEMENTED ***.
+    versions of the target sequences.
 
     Args:
         train_model (Functional): Full encoder-decoder model for training.
@@ -144,3 +151,33 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
     y_test_all = flatten_fold_preds(y_test_all)
 
     return models, histories, y_pred_all, y_test_all
+
+
+def train_seq2seq(model, X, X_prior, y, batch_size=32, epochs=800):
+    """Trains a seq2seq encoder-decoder model.
+
+    Trains a seq2seq encoder-decoder model. Model is trained with teacher
+    forcing from padded versions of the target sequences.
+
+    Args:
+        model (Functional): Full encoder-decoder model for training.
+        X (ndarray): Feature data. First dimension should be number of
+            observations. Dimensions should be compatible with the input to the
+            provided models.
+        X_prior (ndarray): Shifted labels for teacher forcing. Dimensions
+            should be the same as `y`.
+        y (ndarray): Labels. First dimension should be number of observations.
+            Final dimension should be length of output sequence.
+        batch_size (int, optional): Training batch size. Defaults to 32.
+        epochs (int, optional): Number of training epochs. Defaults to 800.
+        early_stop (bool, optional): Whether to stop training early based on
+            validation loss performance. Defaults to True.
+
+    Returns:
+        (Functional, Callback): Trained model, training performance history.
+    """
+    with tf.device('/device:GPU:0'):
+        history = model.fit([X, X_prior], y,
+                            batch_size=batch_size, epochs=epochs)
+
+    return model, history
