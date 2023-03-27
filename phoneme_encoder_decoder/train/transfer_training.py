@@ -15,7 +15,7 @@ def transfer_train_seq2seq(X1, X1_prior, y1, X2_s1, X2_prior_s1, y2_s1, X2_s2,
     # pretrain on first subject
     pretrained_model, _ = train_seq2seq(train_model, X1, X1_prior, y1)
 
-    # reset convolutional weights
+    # reset convolutional weights -- fix to make fully random
     shuffle_weights(pretrained_model.layers[cnn_layer_idx],
                     weights=init_cnn_weights)
 
