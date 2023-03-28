@@ -153,7 +153,7 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
     return models, histories, y_pred_all, y_test_all
 
 
-def train_seq2seq(model, X, X_prior, y, batch_size=32, epochs=800):
+def train_seq2seq(model, X, X_prior, y, batch_size=32, epochs=800, **kwargs):
     """Trains a seq2seq encoder-decoder model.
 
     Trains a seq2seq encoder-decoder model. Model is trained with teacher
@@ -177,7 +177,7 @@ def train_seq2seq(model, X, X_prior, y, batch_size=32, epochs=800):
         (Functional, Callback): Trained model, training performance history.
     """
     with tf.device('/device:GPU:0'):
-        history = model.fit([X, X_prior], y,
-                            batch_size=batch_size, epochs=epochs)
+        history = model.fit([X, X_prior], y, batch_size=batch_size,
+                            epochs=epochs, **kwargs)
 
     return model, history
