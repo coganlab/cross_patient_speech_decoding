@@ -6,9 +6,7 @@ Author: Zac Spalding. Adapted from code by Kumar Duraivel.
 """
 
 import keras_tuner as kt
-import tensorflow as tf
 from keras.optimizers import Adam
-from sklearn.model_selection import KFold
 from sklearn.metrics import balanced_accuracy_score
 
 from train.train import train_seq2seq_kfold
