@@ -9,7 +9,6 @@ import numpy as np
 import tensorflow as tf
 from sklearn.model_selection import KFold
 from keras.callbacks import EarlyStopping
-from tensorflow_addons.callbacks import TQDMProgressBar
 
 
 from processing_utils.sequence_processing import (seq2seq_predict_batch,
@@ -51,8 +50,10 @@ def shuffle_weights(model, weights=None, layer_idx=None):
 
 def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
                         num_folds=10, num_reps=3, batch_size=200, epochs=800,
-                        early_stop=False):
-    """Trains a seq2seq encoder-decoder model using k-fold cross validation.
+                        early_stop=False, **kwargs):
+    """TODO UPDATE DOCSTRING
+
+    Trains a seq2seq encoder-decoder model using k-fold cross validation.
 
     Uses stratified k-fold cross validation to train a seq2seq encoder-decoder
     model. Requires a training model, as well as inference encoder and decoder
@@ -97,14 +98,13 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
     # define k-fold cross validation
     cv = KFold(n_splits=num_folds, shuffle=True)
 
-    cb = [TQDMProgressBar(leave_epoch_progress=False)]
-
+    cb = None
     # create callback for early stopping
     if early_stop:
         # early stopping with patience = 1/10 of total epochs
         es = EarlyStopping(monitor='val_loss', patience=int(epochs / 10),
                            restore_best_weights=True)
-        cb = cb.append(es)
+        cb = [es]
 
     # dictionary for history of each fold
     histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
@@ -112,29 +112,29 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
 
     # cv training
     y_pred_all, y_test_all = [], []
-    for _ in range(num_reps):  # repetitions for stability
-        for train_ind, test_ind in cv.split(X):
-
+    for train_ind, test_ind in cv.split(X):
+        fold = int((len(histories["accuracy"]) / num_reps) + 1)
+        print(f'===== Fold {fold} =====')
+        for _ in range(num_reps):  # repeat fold for stability
             # reset model weights for current fold (also resets associated
             # inference weights)
             shuffle_weights(train_model, weights=init_train_w)
 
             history, y_pred_fold, y_test_fold = train_seq2seq_single_fold(
-                                      train_model, inf_enc, inf_dec, X,
-                                      X_prior, y, train_ind, test_ind,
-                                      batch_size=batch_size, epochs=epochs,
-                                      verbose=0,
-                                      callbacks=cb)
-            
+                                        train_model, inf_enc, inf_dec, X,
+                                        X_prior, y, train_ind, test_ind,
+                                        batch_size=batch_size, epochs=epochs,
+                                        callbacks=cb, **kwargs)
+
             y_pred_all.extend(y_pred_fold)
             y_test_all.extend(y_test_fold)
 
             track_model_history(histories, history)  # track history in-palce
 
-            # histories['accuracy'].append(history.history['accuracy'])
-            # histories['loss'].append(history.history['loss'])
-            # histories['val_accuracy'].append(history.history['val_accuracy'])
-            # histories['val_loss'].append(history.history['val_loss'])
+        # histories['accuracy'].append(history.history['accuracy'])
+        # histories['loss'].append(history.history['loss'])
+        # histories['val_accuracy'].append(history.history['val_accuracy'])
+        # histories['val_loss'].append(history.history['val_loss'])
 
     return histories, np.array(y_pred_all), np.array(y_test_all)
 
@@ -142,7 +142,7 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
 def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
                               train_ind, test_ind, batch_size=200, epochs=800,
                               **kwargs):
-    
+
     X_train, X_test = X[train_ind], X[test_ind]
     X_prior_train, X_prior_test = X_prior[train_ind], X_prior[test_ind]
     y_train, y_test = y[train_ind], y[test_ind]
@@ -151,19 +151,19 @@ def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
                                batch_size=batch_size, epochs=epochs,
                                validation_data=([X_test, X_prior_test],
                                                 y_test), **kwargs)
-    
-    y_test_fold, y_pred_fold = evaluate_seq2seq(inf_enc, inf_dec, X_test,
-                                                y_test)
-    
+
+    y_test_fold, y_pred_fold = decode_seq2seq(inf_enc, inf_dec, X_test,
+                                              y_test)
+
     return history, y_test_fold, y_pred_fold
 
 
-def evaluate_seq2seq(inf_enc, inf_dec, X_test, y_test):
+def decode_seq2seq(inf_enc, inf_dec, X_test, y_test):
     n_output = inf_dec.output_shape[0][-1]  # number of output classes
     seq_len = y_test.shape[1]  # length of output sequence
 
     target = seq2seq_predict_batch(inf_enc, inf_dec, X_test, seq_len,
-                                           n_output)
+                                   n_output)
     y_pred_dec = np.ravel(one_hot_decode_batch(target))
     y_test_dec = np.ravel(one_hot_decode_batch(y_test))
     return y_pred_dec, y_test_dec
@@ -202,4 +202,3 @@ def train_seq2seq(model, X, X_prior, y, batch_size=200, epochs=800, **kwargs):
 def track_model_history(hist_dict, history):
     for key in history.history.keys():
         hist_dict[key].append(history.history[key])
-
