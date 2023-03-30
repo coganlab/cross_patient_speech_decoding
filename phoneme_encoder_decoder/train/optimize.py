@@ -25,10 +25,12 @@ class encDecHyperModel(kt.HyperModel):
         reg_vals = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
         l_rates = [1e-3, 1e-4, 1e-5, 1e-6]
         n_filters = hp.Int('num_filts', min_value=10, max_value=200, step=10)
-        filter_size = hp.Int('filt_size', min_value=3, max_value=10, step=1)
+        # filter_size = hp.Int('filt_size', min_value=3, max_value=10, step=1)
+        filter_size = 10
         rnn_units = hp.Int('rnn_units', min_value=100, max_value=800, step=100)
         reg_lambda = hp.Choice('reg_lambda', values=reg_vals)
-        learning_rate = hp.Choice('learning_rate', values=l_rates)
+        # learning_rate = hp.Choice('learning_rate', values=l_rates)
+        learning_rate = 1e-4
 
         # build model (args define static model parameters like output dim)
         train, inf_enc, inf_dec = self.model(*self.model_args, n_filters,
@@ -39,27 +41,23 @@ class encDecHyperModel(kt.HyperModel):
                       metrics=['accuracy'])
         return train, inf_enc, inf_dec
 
-    def fit(self, hp, model, *args, **kwargs):
-        # return train_seq2seq_kfold(model, *args,
-        #                            batch_size=hp.Choice('batch_size',
-        #                                                 values=[32, 64, 128,
-        #                                                         160]),
-        #                            **kwargs)
+    def fit(self, model, *args, **kwargs):
         return train_seq2seq_kfold(model, *args, **kwargs)
 
 
 class encDecTuner(kt.Tuner):
     def run_trial(self, trial, X, X_prior, y, *args, **kwargs):
         hp = trial.hyperparameters
-        batch_hp = hp.Choice('batch_size', values=[32, 64, 128, 160])
+        # batch_size = hp.Choice('batch_size', values=[32, 64, 128, 160])
+        batch_size = X.shape[0]
         # create model with hyperparameter space
         model, inf_enc, inf_dec = self.hypermodel.build(hp)
 
         # train model over hyperparemters
-        _, _, y_pred, y_test = self.hypermodel.fit(hp, model, inf_enc, inf_dec,
-                                                   X, X_prior, y, *args,
-                                                   batch_size=batch_hp,
-                                                   **kwargs)
+        _, y_pred, y_test = self.hypermodel.fit(model, inf_enc, inf_dec,
+                                                X, X_prior, y, *args,
+                                                batch_size=batch_size,
+                                                **kwargs)
         # evaluate through validation accuracy
         val_accuracy = balanced_accuracy_score(y_test, y_pred)
         self.oracle.update_trial(trial.trial_id,
