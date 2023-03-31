@@ -12,8 +12,7 @@ from keras.callbacks import EarlyStopping
 
 
 from processing_utils.sequence_processing import (seq2seq_predict_batch,
-                                                  one_hot_decode_batch,
-                                                  flatten_fold_preds)
+                                                  one_hot_decode_batch)
 
 
 def shuffle_weights(model, weights=None, layer_idx=None):
@@ -21,7 +20,8 @@ def shuffle_weights(model, weights=None, layer_idx=None):
     This is a fast approximation of re-initializing the weights of a model.
     Assumes weights are distributed independently of the dimensions of the
     weight tensors (i.e., the weights have the same distribution along each
-    dimension).
+    dimension). MODIFICATION: Added layer_idx argument to allow selection of
+    specific layer to shuffle weights for.
 
     TAKEN FROM: jkleint's (https://gist.github.com/jkleint) answer on Github
     (https://github.com/keras-team/keras/issues/341)
@@ -31,6 +31,9 @@ def shuffle_weights(model, weights=None, layer_idx=None):
         weights (list(ndarray), optional):  The model's weights will be
             replaced by a random permutation of these weights.
             Defaults to None.
+        layer_idx (int, optional): Index of layer to shuffle weights for if
+            targeting a specific layer instead of whole model. Defaults to
+            None.
     """
     if weights is None:
         if layer_idx is None:
@@ -51,12 +54,11 @@ def shuffle_weights(model, weights=None, layer_idx=None):
 def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
                         num_folds=10, num_reps=3, batch_size=200, epochs=800,
                         early_stop=False, **kwargs):
-    """TODO UPDATE DOCSTRING
+    """Trains a seq2seq encoder-decoder model using k-fold cross validation.
 
-    Trains a seq2seq encoder-decoder model using k-fold cross validation.
-
-    Uses stratified k-fold cross validation to train a seq2seq encoder-decoder
-    model. Requires a training model, as well as inference encoder and decoder
+    Uses k-fold cross validation to train a seq2seq encoder-decoder
+    model. Each fold is repeated multiple times for stability in predictions.
+    Requires a training model, as well as inference encoder and decoder
     for predicting sequences. Model is trained with teacher forcing from padded
     versions of the target sequences.
 
@@ -78,19 +80,19 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
             validation loss performance. Defaults to True.
 
     Returns:
-        (Dict, Dict, ndarray, ndarray): Dictionary containing trained models
+        (Dict, ndarray, ndarray): Dictionary containing trained models
             by fold, dictionary containing training performance history for
             each fold, predicted labels across folds, and true labels across
             folds.
-            Dictionary structures are:
-            -models = {'train': [fold1_train_model, fold2_train_model, ...],
-                       'inf_enc': [fold1_inf_enc, fold2_inf_enc, ...],
-                       'inf_dec': [fold1_inf_dec, fold2_inf_dec, ...]}
-
-            -histories = {'accuracy': [fold1_acc, fold2_acc, ...],
-                          'loss': [fold1_loss, fold2_loss, ...],
-                          'val_accuracy': [fold1_val_acc, fold2_val_acc, ...],
-                          'val_loss': [fold1_val_loss, fold2_val_loss, ...]}
+            Dictionary structure is:
+            histories = {'accuracy': [fold1rep1_acc, ..., fold1repn_acc,
+                                      fold2rep1_acc, ...],
+                          'loss': [fold1rep1_loss, ..., fold1repn_loss,
+                                   fold2rep1_loss, ...],
+                          'val_accuracy': [fold1rep1_acc, ..., fold1repn_acc,
+                                           fold2rep1_acc, ...],
+                          'val_loss': [fold1rep1_loss, ..., fold1repn_loss,
+                                       fold2rep1_loss, ...],}
     """
     # save initial weights to reset model for each fold
     init_train_w = train_model.get_weights()
@@ -129,12 +131,7 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
             y_pred_all.extend(y_pred_fold)
             y_test_all.extend(y_test_fold)
 
-            track_model_history(histories, history)  # track history in-palce
-
-        # histories['accuracy'].append(history.history['accuracy'])
-        # histories['loss'].append(history.history['loss'])
-        # histories['val_accuracy'].append(history.history['val_accuracy'])
-        # histories['val_loss'].append(history.history['val_loss'])
+            track_model_history(histories, history)  # track history in-place
 
     return histories, np.array(y_pred_all), np.array(y_test_all)
 
@@ -142,7 +139,30 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
 def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
                               train_ind, test_ind, batch_size=200, epochs=800,
                               **kwargs):
+    """Implements single fold of cross-validation for seq2seq models.
 
+    Args:
+        train_model (Functional): Full encoder-decoder model for training.
+        inf_enc (Functional): Inference encoder model.
+        inf_dec (Functional): Inference decoder model.
+        X (ndarray): Feature data. First dimension should be number of
+            observations. Dimensions should be compatible with the input to the
+            provided models.
+        X_prior (ndarray): Shifted labels for teacher forcing. Dimensions
+            should be the same as `y`.
+        y (ndarray): Labels. First dimension should be number of observations.
+            Final dimension should be length of output sequence.
+        train_ind (ndarray): Indices of training data as returned from split
+            method of sklearn cross-validation objects.
+        test_ind (ndarray): Indices of test data as returned from split
+            method of sklearn cross-validation objects.
+        batch_size (int, optional): Training batch size. Defaults to 200.
+        epochs (int, optional): Number of training epochs. Defaults to 800.
+
+    Returns:
+        (Callback, ndarray, ndarray): Model training history, predicted labels,
+            and true labels.
+    """
     X_train, X_test = X[train_ind], X[test_ind]
     X_prior_train, X_prior_test = X_prior[train_ind], X_prior[test_ind]
     y_train, y_test = y[train_ind], y[test_ind]
@@ -159,6 +179,23 @@ def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
 
 
 def decode_seq2seq(inf_enc, inf_dec, X_test, y_test):
+    """Uses trained inference encoder and decoder to predict sequences.
+
+    Args:
+        inf_enc (Functional): Inference encoder model.
+        inf_dec (Functional): Inference decoder model.
+        X_test (ndarray): Test feature data. First dimension should be number
+            of observations. Dimensions should be compatible with the input to
+            the inference encoder.
+        y_test (ndarray): One-hot encoded test labels. First dimension should
+            be number of observations. Second dimension should be length of
+            output sequence.
+
+    Returns:
+        (ndarray, ndarray): 1D array of predicted labels and 1D array of true
+            labels. Length of each array is number of observations times the
+            sequence length.
+    """
     n_output = inf_dec.output_shape[0][-1]  # number of output classes
     seq_len = y_test.shape[1]  # length of output sequence
 
@@ -200,5 +237,11 @@ def train_seq2seq(model, X, X_prior, y, batch_size=200, epochs=800, **kwargs):
 
 
 def track_model_history(hist_dict, history):
+    """Appends model training history to a dictionary in place.
+
+    Args:
+        hist_dict (Dict): Dictionary to append history to.
+        history (Callback): Model training history from keras model fit method.
+    """
     for key in history.history.keys():
         hist_dict[key].append(history.history[key])
