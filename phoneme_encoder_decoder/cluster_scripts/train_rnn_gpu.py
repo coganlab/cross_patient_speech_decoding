@@ -2,9 +2,14 @@
 Script to train a RNN model on the DCC cluster.
 """
 
+from keras.optimizers import Adam
+from sklearn.metrics import balanced_accuracy_score
+
 from ..processing_utils.feature_data_from_mat import get_high_gamma_data
 from ..processing_utils.sequence_processing import pad_sequence_teacher_forcing
 from ..seq2seq_models.rnn_models import lstm_1Dcnn_model
+from ..train.train import train_seq2seq_kfold
+from ..visualization.plot_model_performance import plot_accuracy_loss
 
 DATA_PATH = '~/workspace/'
 
@@ -28,6 +33,25 @@ train_model, inf_enc, inf_dec = lstm_1Dcnn_model(n_input_time, n_input_channel,
                                                  filter_size, n_units,
                                                  reg_lambda, bidir=bidir)
 
-# Train models
+# Train model
+num_folds = 10
+batch_size = 200
+epochs = 200
+learning_rate = 5e-4
+
+train_model.compile(optimizer=Adam(learning_rate),
+                    loss='categorical_crossentropy', metrics=['accuracy'])
+histories, y_pred_all, y_test_all = train_seq2seq_kfold(train_model, inf_enc,
+                                                        inf_dec, X, X_prior, y,
+                                                        num_folds=num_folds,
+                                                        batch_size=batch_size,
+                                                        epochs=epochs,
+                                                        early_stop=False)
 
 # Save outputs
+b_acc = balanced_accuracy_score(y_test_all, y_pred_all)
+with open(DATA_PATH + 'outputs/train1_b_acc.txt', 'w') as f:
+    f.write(str(b_acc))
+
+plot_accuracy_loss(histories, epochs=epochs, save_fig=True,
+                   save_path=DATA_PATH + 'outputs/plots/train1_plot.png')
