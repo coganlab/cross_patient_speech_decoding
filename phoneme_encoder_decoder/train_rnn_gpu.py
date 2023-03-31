@@ -2,6 +2,7 @@
 Script to train a RNN model on the DCC cluster.
 """
 
+import os
 from keras.optimizers import Adam
 from sklearn.metrics import balanced_accuracy_score
 
@@ -11,12 +12,13 @@ from seq2seq_models.rnn_models import lstm_1Dcnn_model
 from train.train import train_seq2seq_kfold
 from visualization.plot_model_performance import plot_accuracy_loss
 
-# DATA_PATH = '~/workspace/'
-DATA_PATH = 'data/'
+HOME_PATH = os.path.expanduser('~')
+DATA_PATH = HOME_PATH + '/workspace/'
+# DATA_PATH = 'data/'
 
 # Load in data from workspace mat files
 hg_trace, hg_map, phon_labels = get_high_gamma_data(DATA_PATH +
-                                                    'S14/S14_HG_sigChannel')
+                                                    'S14/S14_HG_sigChannel.mat')
 n_output = 10
 X = hg_trace  # use HG traces (n_trials, n_channels, n_timepoints) for 1D CNN
 X_prior, y, _, _ = pad_sequence_teacher_forcing(phon_labels, n_output)
@@ -35,9 +37,9 @@ train_model, inf_enc, inf_dec = lstm_1Dcnn_model(n_input_time, n_input_channel,
                                                  reg_lambda, bidir=bidir)
 
 # Train model
-num_folds = 2
+num_folds = 10
 batch_size = 200
-epochs = 1
+epochs = 200
 learning_rate = 5e-4
 
 train_model.compile(optimizer=Adam(learning_rate),
