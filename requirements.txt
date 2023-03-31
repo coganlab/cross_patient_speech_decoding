@@ -10,8 +10,10 @@ pandas
 jupyter
 tensorflow<2.11
 tensorflow_probability
+tensorflow-addons
 h5py
 pytest
 pytest-pycodestyle
 pytest-cov
+tqdm
 
