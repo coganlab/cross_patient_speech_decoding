@@ -30,7 +30,7 @@ class encDecHyperModel(kt.HyperModel):
         rnn_units = hp.Int('rnn_units', min_value=100, max_value=800, step=100)
         reg_lambda = hp.Choice('reg_lambda', values=reg_vals)
         # learning_rate = hp.Choice('learning_rate', values=l_rates)
-        learning_rate = 1e-4
+        learning_rate = 5e-4
 
         # build model (args define static model parameters like output dim)
         train, inf_enc, inf_dec = self.model(*self.model_args, n_filters,
@@ -42,7 +42,7 @@ class encDecHyperModel(kt.HyperModel):
         return train, inf_enc, inf_dec
 
     def fit(self, model, *args, **kwargs):
-        return train_seq2seq_kfold(model, *args, **kwargs)
+        return train_seq2seq_kfold(model, *args, verbose=0, **kwargs)
 
 
 class encDecTuner(kt.Tuner):
