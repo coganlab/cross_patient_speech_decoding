@@ -64,7 +64,8 @@ def linear_cnn_3D_module(n_input_depth, n_input_x, n_input_y, n_filters,
     return cnn_inputs, cnn_layer
 
 
-def lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
+def lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda,
+                        dropout=0.2):
     """Creates an LSTM encoder-decoder model via Keras. Designed to be used
     following another network layer (e.g. CNN)
 
@@ -83,7 +84,7 @@ def lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     encoder = LSTM(n_units, return_state=True,
                    kernel_regularizer=L2(reg_lambda),
                    recurrent_regularizer=L2(reg_lambda),
-                   bias_regularizer=L2(reg_lambda))
+                   bias_regularizer=L2(reg_lambda), dropout=dropout)
     encoder_outputs, state_h, state_c = encoder(encoder_inputs)
     encoder_states = [state_h, state_c]
 
@@ -92,7 +93,7 @@ def lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     decoder_lstm = LSTM(n_units, return_sequences=True, return_state=True,
                         kernel_regularizer=L2(reg_lambda),
                         recurrent_regularizer=L2(reg_lambda),
-                        bias_regularizer=L2(reg_lambda))
+                        bias_regularizer=L2(reg_lambda), dropout=dropout)
     decoder_outputs, _, _ = decoder_lstm(decoder_inputs,
                                          initial_state=encoder_states)
     decoder_dense = Dense(n_output, activation='softmax')
@@ -122,7 +123,8 @@ def lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     return training_model, inf_enc_model, inf_dec_model
 
 
-def gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
+def gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda,
+                       dropout=0.2):
     """Creates a  GRU encoder-decoder model via Keras. Designed to be used
     following another network layer (e.g. CNN)
 
@@ -141,7 +143,7 @@ def gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     encoder = GRU(n_units, return_state=True,
                   kernel_regularizer=L2(reg_lambda),
                   recurrent_regularizer=L2(reg_lambda),
-                  bias_regularizer=L2(reg_lambda))
+                  bias_regularizer=L2(reg_lambda), dropout=dropout)
     encoder_outputs, state_h = encoder(encoder_inputs)
     encoder_states = [state_h]
 
@@ -150,7 +152,7 @@ def gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     decoder_gru = GRU(n_units, return_sequences=True, return_state=True,
                       kernel_regularizer=L2(reg_lambda),
                       recurrent_regularizer=L2(reg_lambda),
-                      bias_regularizer=L2(reg_lambda))
+                      bias_regularizer=L2(reg_lambda), dropout=dropout)
     decoder_outputs, _ = decoder_gru(decoder_inputs,
                                      initial_state=encoder_states)
     decoder_dense = Dense(n_output, activation='softmax')
@@ -178,7 +180,8 @@ def gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     return model, inf_enc_model, inf_dec_model
 
 
-def bi_lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
+def bi_lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda,
+                           dropout=0.2):
     """Creates a biderctional LSTM encoder-decoder model via Keras. Designed to
     be used following another network layer (e.g. CNN)
 
@@ -197,7 +200,8 @@ def bi_lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     encoder = Bidirectional(LSTM(n_units, return_state=True,
                                  kernel_regularizer=L2(reg_lambda),
                                  recurrent_regularizer=L2(reg_lambda),
-                                 bias_regularizer=L2(reg_lambda)))
+                                 bias_regularizer=L2(reg_lambda),
+                                 dropout=dropout))
     (encoder_outputs, forward_state_h, forward_state_c, backward_state_h,
      backward_state_c) = encoder(encoder_inputs)
     state_h = Average()([forward_state_h, backward_state_h])
@@ -209,7 +213,7 @@ def bi_lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     decoder_lstm = LSTM(n_units, return_sequences=True, return_state=True,
                         kernel_regularizer=L2(reg_lambda),
                         recurrent_regularizer=L2(reg_lambda),
-                        bias_regularizer=L2(reg_lambda))
+                        bias_regularizer=L2(reg_lambda), dropout=dropout)
     decoder_outputs, _, _ = decoder_lstm(decoder_inputs,
                                          initial_state=encoder_states)
     decoder_dense = Dense(n_output, activation='softmax')
@@ -239,7 +243,8 @@ def bi_lstm_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     return training_model, inf_enc_model, inf_dec_model
 
 
-def bi_gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
+def bi_gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda,
+                          dropout=0.2):
     """Creates a biderctional GRU encoder-decoder model via Keras. Designed to
     be used following another network layer (e.g. CNN)
 
@@ -258,7 +263,8 @@ def bi_gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     encoder = Bidirectional(GRU(n_units, return_state=True,
                                 kernel_regularizer=L2(reg_lambda),
                                 recurrent_regularizer=L2(reg_lambda),
-                                bias_regularizer=L2(reg_lambda)))
+                                bias_regularizer=L2(reg_lambda),
+                                dropout=dropout))
     _, forward_state_h, backward_state_h = encoder(encoder_inputs)
     state_h = Average()([forward_state_h, backward_state_h])
     encoder_states = [state_h]
@@ -268,7 +274,7 @@ def bi_gru_enc_dec_module(encoder_inputs, n_output, n_units, reg_lambda):
     decoder_gru = GRU(n_units, return_sequences=True, return_state=True,
                       kernel_regularizer=L2(reg_lambda),
                       recurrent_regularizer=L2(reg_lambda),
-                      bias_regularizer=L2(reg_lambda))
+                      bias_regularizer=L2(reg_lambda), dropout=dropout)
     decoder_outputs, _ = decoder_gru(decoder_inputs,
                                      initial_state=encoder_states)
     decoder_dense = Dense(n_output, activation='softmax')
