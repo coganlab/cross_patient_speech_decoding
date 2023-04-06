@@ -229,9 +229,9 @@ def train_seq2seq(model, X, X_prior, y, batch_size=200, epochs=800, **kwargs):
     Returns:
         (Functional, Callback): Trained model, training performance history.
     """
-    with tf.device('/device:GPU:0'):
-        history = model.fit([X, X_prior], y, batch_size=batch_size,
-                            epochs=epochs, **kwargs)
+    # with tf.device('/device:GPU:0'):
+    history = model.fit([X, X_prior], y, batch_size=batch_size,
+                        epochs=epochs, **kwargs)
 
     return model, history
 
