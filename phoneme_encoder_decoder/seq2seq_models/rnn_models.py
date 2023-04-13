@@ -52,7 +52,7 @@ def reshape_3d_cnn(cnn_input, cnn_layer):
 
 
 def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
-                     filter_size, n_units, reg_lambda, dropout=0.2,
+                     filter_size, n_units, reg_lambda, dropout=0.0,
                      bidir=False):
     """Creates a joint 1D CNN-LSTM  model by adding a 1D convolutional layer to
     the front of an encoder-decoder LSTM model.
@@ -102,7 +102,7 @@ def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
 
 
 def lstm_3Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
-                     filter_size, n_units, reg_lambda, dropout=0.2,
+                     filter_size, n_units, reg_lambda, dropout=0.0,
                      bidir=False):
     """Creates a joint 3D CNN-LSTM  model by adding a 3D convolutional layer to
     the front of an encoder-decoder LSTM model.
@@ -155,7 +155,7 @@ def lstm_3Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
 
 
 def gru_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
-                    filter_size, n_units, reg_lambda, dropout=0.2,
+                    filter_size, n_units, reg_lambda, dropout=0.0,
                     bidir=False):
     """Creates a joint 1D CNN-GRU  model by adding a 1D convolutional layer to
     the front of an encoder-decoder GRU model.
@@ -205,7 +205,7 @@ def gru_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
 
 
 def gru_3Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
-                    filter_size, n_units, reg_lambda, dropout=0.2,
+                    filter_size, n_units, reg_lambda, dropout=0.0,
                     bidir=False):
     """Creates a joint 3D CNN-GRU  model by adding a 3D convolutional layer to
     the front of an encoder-decoder GRU model.
