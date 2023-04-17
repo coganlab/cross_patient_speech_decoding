@@ -13,7 +13,8 @@ from processing_utils.sequence_processing import (seq2seq_predict_batch,
 
 
 def transfer_seq2seq_kfold(train_model, inf_enc, inf_dec, X1, X1_prior, y1,
-                           X2, X2_prior, y2, num_folds=10, **kwargs):
+                           X2, X2_prior, y2, num_folds=10, diff_chans=False,
+                           **kwargs):
     # save initial weights to reset model for each fold
     init_train_w = train_model.get_weights()
 
