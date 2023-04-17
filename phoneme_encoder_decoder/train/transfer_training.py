@@ -13,8 +13,7 @@ from processing_utils.sequence_processing import (seq2seq_predict_batch,
 
 
 def transfer_seq2seq_kfold(train_model, inf_enc, inf_dec, X1, X1_prior, y1,
-                           X2, X2_prior, y2, num_folds=10, diff_chans=False,
-                           **kwargs):
+                           X2, X2_prior, y2, num_folds=10, **kwargs):
     # save initial weights to reset model for each fold
     init_train_w = train_model.get_weights()
 
@@ -110,6 +109,64 @@ def transfer_train_seq2seq(X1, X1_prior, y1, X2_train, X2_prior_train,
                                                            y2_test))
 
     return fine_tune_model, inf_enc, inf_dec, fine_tune_history
+
+
+def transfer_seq2seq_kfold_diff_chans(train_model, new_model, new_enc, new_dec,
+                                      X1, X1_prior, y1, X2, X2_prior, y2,
+                                      num_folds=10, **kwargs):
+    # save initial weights to reset model for each fold
+    init_train_w = train_model.get_weights()
+    init_new_w = new_model.get_weights()
+
+    n_output = new_dec.output_shape[0][-1]  # number of output classes
+    seq_len = y2.shape[1]  # length of output sequence
+
+    # define k-fold cross validation
+    cv = KFold(n_splits=num_folds, shuffle=True)
+
+    # dictionary for tracking models and history of each fold
+    models = {'train': [], 'inf_enc': [], 'inf_dec': []}
+    histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
+                 'val_loss': []}
+
+    # cv training
+    y_pred_all, y_test_all = [], []
+    for train_ind, test_ind in cv.split(X2):
+        print(f'========== Fold {len(models["train"]) + 1} ==========')
+        X2_train, X2_test = X2[train_ind], X2[test_ind]
+        X2_prior_train, X2_prior_test = X2_prior[train_ind], X2_prior[test_ind]
+        y2_train, y2_test = y2[train_ind], y2[test_ind]
+
+        # reset model weights for current fold (also resets associated
+        # inference weights)
+        shuffle_weights(train_model, weights=init_train_w)
+        shuffle_weights(new_model, weights=init_new_w)
+
+        new_model, new_enc, new_dec, transfer_hist = \
+            transfer_train_seq2seq_diff_chans(X1, X1_prior, y1, X2_train,
+                                              X2_prior_train, y2_train,
+                                              X2_test, X2_prior_test, y2_test,
+                                              train_model, new_model, new_enc,
+                                              new_dec, **kwargs)
+
+        models['train'].append(train_model)
+        models['inf_enc'].append(new_enc)
+        models['inf_dec'].append(new_dec)
+
+        histories['accuracy'].append(transfer_hist.history['accuracy'])
+        histories['loss'].append(transfer_hist.history['loss'])
+        histories['val_accuracy'].append(transfer_hist.history['val_accuracy'])
+        histories['val_loss'].append(transfer_hist.history['val_loss'])
+
+        target = seq2seq_predict_batch(new_enc, new_dec, X2_test, seq_len,
+                                       n_output)
+        y_test_all.append(one_hot_decode_batch(y2_test))
+        y_pred_all.append(one_hot_decode_batch(target))
+
+    y_pred_all = flatten_fold_preds(y_pred_all)
+    y_test_all = flatten_fold_preds(y_test_all)
+
+    return models, histories, y_pred_all, y_test_all
 
 
 def transfer_train_seq2seq_diff_chans(X1, X1_prior, y1, X2_train,
