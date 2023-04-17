@@ -130,9 +130,6 @@ def transfer_seq2seq_kfold_diff_chans(train_model, tar_model, tar_enc, tar_dec,
     init_train_w = train_model.get_weights()
     init_tar_w = tar_model.get_weights()
 
-    n_output = tar_dec.output_shape[0][-1]  # number of output classes
-    seq_len = y2.shape[1]  # length of output sequence
-
     # define k-fold cross validation
     cv = KFold(n_splits=num_folds, shuffle=True)
 
