@@ -47,7 +47,8 @@ def transfer_seq2seq_kfold(train_model, inf_enc, inf_dec, X1, X1_prior, y1,
                                                    X2, X2_prior, y2, train_ind,
                                                    test_ind, **kwargs)
 
-            track_model_history(histories, transfer_hist)  # track history in-place
+            # track history in-place
+            track_model_history(histories, transfer_hist)
 
             y_pred_all.extend(y_pred_fold)
             y_test_all.extend(y_test_fold)
@@ -63,13 +64,12 @@ def transfer_train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X1,
     X2_prior_train, X2_prior_test = X2_prior[train_ind], X2_prior[test_ind]
     y2_train, y2_test = y2[train_ind], y2[test_ind]
 
-    _, _, _, transfer_hist = transfer_train_seq2seq(X1, X1_prior, y1, X2_train,
-                                                    X2_prior_train, y2_train,
-                                                    X2_test, X2_prior_test,
-                                                    y2_test, train_model,
-                                                    inf_enc, inf_dec,
-                                                    batch_size=batch_size,
-                                                    **kwargs)
+    _, transfer_hist = transfer_train_seq2seq(X1, X1_prior, y1, X2_train,
+                                              X2_prior_train, y2_train,
+                                              X2_test, X2_prior_test,
+                                              y2_test, train_model,
+                                              batch_size=batch_size,
+                                              **kwargs)
     
     y_test_fold, y_pred_fold = decode_seq2seq(inf_enc, inf_dec, X2_test,
                                               y2_test)
@@ -78,7 +78,7 @@ def transfer_train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X1,
 
 def transfer_train_seq2seq(X1, X1_prior, y1, X2_train, X2_prior_train,
                            y2_train, X2_test, X2_prior_test, y2_test,
-                           train_model, inf_enc, inf_dec, pretrain_epochs=200,
+                           train_model, pretrain_epochs=200,
                            conv_epochs=60, fine_tune_epochs=540,
                            cnn_layer_idx=1, enc_dec_layer_idx=-1, **kwargs):
     init_cnn_weights = train_model.layers[1].get_weights()
@@ -120,74 +120,85 @@ def transfer_train_seq2seq(X1, X1_prior, y1, X2_train, X2_prior_train,
                                                             X2_prior_test],
                                                            y2_test), **kwargs)
 
-    return fine_tune_model, inf_enc, inf_dec, fine_tune_history
+    return fine_tune_model, fine_tune_history
 
 
-def transfer_seq2seq_kfold_diff_chans(train_model, new_model, new_enc, new_dec,
+def transfer_seq2seq_kfold_diff_chans(train_model, tar_model, tar_enc, tar_dec,
                                       X1, X1_prior, y1, X2, X2_prior, y2,
-                                      num_folds=10, **kwargs):
+                                      num_folds=10, num_reps=3, **kwargs):
     # save initial weights to reset model for each fold
     init_train_w = train_model.get_weights()
-    init_new_w = new_model.get_weights()
+    init_tar_w = tar_model.get_weights()
 
-    n_output = new_dec.output_shape[0][-1]  # number of output classes
+    n_output = tar_dec.output_shape[0][-1]  # number of output classes
     seq_len = y2.shape[1]  # length of output sequence
 
     # define k-fold cross validation
     cv = KFold(n_splits=num_folds, shuffle=True)
 
-    # dictionary for tracking models and history of each fold
-    models = {'train': [], 'inf_enc': [], 'inf_dec': []}
+    # dictionary for tracking history of each fold
     histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
                  'val_loss': []}
 
     # cv training
     y_pred_all, y_test_all = [], []
     for train_ind, test_ind in cv.split(X2):
-        print(f'========== Fold {len(models["train"]) + 1} ==========')
-        X2_train, X2_test = X2[train_ind], X2[test_ind]
-        X2_prior_train, X2_prior_test = X2_prior[train_ind], X2_prior[test_ind]
-        y2_train, y2_test = y2[train_ind], y2[test_ind]
+        fold = int((len(histories["accuracy"]) / num_reps) + 1)
+        print(f'===== Fold {fold} =====')
+        for _ in range(num_reps):  # repeat fold for stability
 
-        # reset model weights for current fold (also resets associated
-        # inference weights)
-        shuffle_weights(train_model, weights=init_train_w)
-        shuffle_weights(new_model, weights=init_new_w)
+            # reset model weights for current fold (also resets associated
+            # inference weights)
+            shuffle_weights(train_model, weights=init_train_w)
+            shuffle_weights(tar_model, weights=init_tar_w)
 
-        new_model, new_enc, new_dec, transfer_hist = \
-            transfer_train_seq2seq_diff_chans(X1, X1_prior, y1, X2_train,
-                                              X2_prior_train, y2_train,
-                                              X2_test, X2_prior_test, y2_test,
-                                              train_model, new_model, new_enc,
-                                              new_dec, **kwargs)
+            transfer_hist, y_pred_fold, y_test_fold = \
+                transfer_train_seq2seq_single_fold(train_model, tar_model,
+                                                   tar_enc, tar_dec, X1,
+                                                   X1_prior, y1, X2, X2_prior,
+                                                   y2, train_ind, test_ind,
+                                                   **kwargs)
 
-        models['train'].append(train_model)
-        models['inf_enc'].append(new_enc)
-        models['inf_dec'].append(new_dec)
+            # track history in-place
+            track_model_history(histories, transfer_hist)
 
-        histories['accuracy'].append(transfer_hist.history['accuracy'])
-        histories['loss'].append(transfer_hist.history['loss'])
-        histories['val_accuracy'].append(transfer_hist.history['val_accuracy'])
-        histories['val_loss'].append(transfer_hist.history['val_loss'])
+            y_pred_all.extend(y_pred_fold)
+            y_test_all.extend(y_test_fold)
 
-        target = seq2seq_predict_batch(new_enc, new_dec, X2_test, seq_len,
-                                       n_output)
-        y_test_all.append(one_hot_decode_batch(y2_test))
-        y_pred_all.append(one_hot_decode_batch(target))
+    return histories, np.array(y_pred_all), np.array(y_test_all)
 
-    y_pred_all = flatten_fold_preds(y_pred_all)
-    y_test_all = flatten_fold_preds(y_test_all)
 
-    return models, histories, y_pred_all, y_test_all
+def transfer_train_seq2seq_single_fold_diff_chans(train_model, tar_model,
+                                                  tar_enc, tar_dec, X1, 
+                                                  X1_prior, y1, X2, X2_prior,
+                                                  y2, train_ind, test_ind,
+                                                  batch_size=200, **kwargs):
+    X2_train, X2_test = X2[train_ind], X2[test_ind]
+    X2_prior_train, X2_prior_test = X2_prior[train_ind], X2_prior[test_ind]
+    y2_train, y2_test = y2[train_ind], y2[test_ind]
+
+    _, transfer_hist = transfer_train_seq2seq_diff_chans(X1, X1_prior, y1,
+                                                         X2_train,
+                                                         X2_prior_train,
+                                                         y2_train, X2_test,
+                                                         X2_prior_test,
+                                                         y2_test, train_model,
+                                                         tar_model,
+                                                         batch_size=batch_size,
+                                                         **kwargs)
+    
+    y_test_fold, y_pred_fold = decode_seq2seq(tar_enc, tar_dec, X2_test,
+                                              y2_test)
+    
+    return transfer_hist, y_test_fold, y_pred_fold
 
 
 def transfer_train_seq2seq_diff_chans(X1, X1_prior, y1, X2_train,
                                       X2_prior_train, y2_train, X2_test,
                                       X2_prior_test, y2_test, train_model,
-                                      new_model, new_enc, new_dec,
-                                      pretrain_epochs=200, conv_epochs=60,
-                                      fine_tune_epochs=540,
-                                      enc_dec_layer_idx=-1):
+                                      new_model, pretrain_epochs=200,
+                                      conv_epochs=60, fine_tune_epochs=540,
+                                      enc_dec_layer_idx=-1, **kwargs):
     lr = train_model.optimizer.get_config()['learning_rate']
 
     # pretrain on first subject
@@ -226,7 +237,7 @@ def transfer_train_seq2seq_diff_chans(X1, X1_prior, y1, X2_train,
                                                             X2_prior_test],
                                                            y2_test))
 
-    return fine_tune_model, new_enc, new_dec, fine_tune_history
+    return fine_tune_model, fine_tune_history
 
 
 def copy_applicable_weights(model, new_model, **kwargs):
