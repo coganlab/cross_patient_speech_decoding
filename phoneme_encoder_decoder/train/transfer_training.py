@@ -13,7 +13,7 @@ from processing_utils.sequence_processing import (seq2seq_predict_batch,
 
 
 def transfer_seq2seq_kfold(train_model, inf_enc, inf_dec, X1, X1_prior, y1,
-                           X2, X2_prior, y2, num_folds=10):
+                           X2, X2_prior, y2, num_folds=10, **kwargs):
     # save initial weights to reset model for each fold
     init_train_w = train_model.get_weights()
 
@@ -42,7 +42,7 @@ def transfer_seq2seq_kfold(train_model, inf_enc, inf_dec, X1, X1_prior, y1,
 
         train_model, inf_enc, inf_dec, transfer_hist = transfer_train_seq2seq(
             X1, X1_prior, y1, X2_train, X2_prior_train, y2_train, X2_test,
-            X2_prior_test, y2_test, train_model, inf_enc, inf_dec)
+            X2_prior_test, y2_test, train_model, inf_enc, inf_dec, **kwargs)
 
         models['train'].append(train_model)
         models['inf_enc'].append(inf_enc)
@@ -70,6 +70,7 @@ def transfer_train_seq2seq(X1, X1_prior, y1, X2_train, X2_prior_train,
                            conv_epochs=60, fine_tune_epochs=540,
                            cnn_layer_idx=1, enc_dec_layer_idx=-1):
     init_cnn_weights = train_model.layers[1].get_weights()
+    lr = train_model.optimizer.get_config()['learning_rate']
 
     # pretrain on first subject
     pretrained_model, _ = train_seq2seq(train_model, X1, X1_prior, y1,
@@ -81,7 +82,7 @@ def transfer_train_seq2seq(X1, X1_prior, y1, X2_train, X2_prior_train,
 
     # freeze encoder decoder weights
     freeze_layer(pretrained_model, enc_dec_layer_idx,
-                 optimizer=Adam(1e-3),
+                 optimizer=Adam(lr),
                  loss='categorical_crossentropy',
                  metrics=['accuracy'])
 
@@ -92,7 +93,7 @@ def transfer_train_seq2seq(X1, X1_prior, y1, X2_train, X2_prior_train,
 
     # unfreeze encoder decoder weights
     unfreeze_layer(updated_cnn_model, enc_dec_layer_idx,
-                   optimizer=Adam(1e-3),
+                   optimizer=Adam(lr),
                    loss='categorical_crossentropy',
                    metrics=['accuracy'])
 
