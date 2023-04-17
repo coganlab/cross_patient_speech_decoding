@@ -64,10 +64,10 @@ tar_model, tar_enc, tar_dec = lstm_1Dcnn_model(n_input_time,
                                                reg_lambda, bidir=bidir)
 
 # Train model
-num_folds = 2
-num_reps = 1
+num_folds = 10
+num_reps = 3
 batch_size = 200
-epochs = 5
+epochs = 540
 learning_rate = 5e-5
 
 pre_model.compile(optimizer=Adam(learning_rate),
@@ -75,7 +75,7 @@ pre_model.compile(optimizer=Adam(learning_rate),
 tar_model.compile(optimizer=Adam(learning_rate),
                   loss='categorical_crossentropy', metrics=['accuracy'])
 
-n_iter = 2 # for accuracy distribution
+n_iter = 5 # for accuracy distribution
 accs = []
 for i in range(n_iter):
     print('Iteration: ', i+1)
@@ -84,6 +84,7 @@ for i in range(n_iter):
                                 X1, X1_prior, y1, X2, X2_prior, y2,
                                 num_folds=num_folds, num_reps=num_reps)
     b_acc = balanced_accuracy_score(y_test, y_pred)
+    accs.append(b_acc)
 
     plot_accuracy_loss(t_hist, epochs=epochs, save_fig=True,
                        save_path=DATA_PATH +
