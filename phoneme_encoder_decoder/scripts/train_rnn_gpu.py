@@ -15,9 +15,9 @@ from seq2seq_models.rnn_models import lstm_1Dcnn_model
 from train.train import train_seq2seq_kfold
 from visualization.plot_model_performance import plot_accuracy_loss
 
-# HOME_PATH = os.path.expanduser('~')
-# DATA_PATH = HOME_PATH + '/workspace/'
-DATA_PATH = '../data/'
+HOME_PATH = os.path.expanduser('~')
+DATA_PATH = HOME_PATH + '/workspace/'
+# DATA_PATH = '../data/'
 
 # Load in data from workspace mat files
 hg_trace, hg_map, phon_labels = get_high_gamma_data(DATA_PATH +
