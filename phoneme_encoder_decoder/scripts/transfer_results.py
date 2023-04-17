@@ -82,7 +82,7 @@ for i in range(n_iter):
     t_hist, y_pred, y_test = transfer_seq2seq_kfold_diff_chans(
                                 pre_model, tar_model, tar_enc, tar_dec,
                                 X1, X1_prior, y1, X2, X2_prior, y2,
-                                num_fold=num_folds, num_reps=num_reps)
+                                num_folds=num_folds, num_reps=num_reps)
     b_acc = balanced_accuracy_score(y_test, y_pred)
 
     plot_accuracy_loss(t_hist, epochs=epochs, save_fig=True,
