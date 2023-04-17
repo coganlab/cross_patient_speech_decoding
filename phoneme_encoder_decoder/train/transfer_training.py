@@ -111,6 +111,67 @@ def transfer_train_seq2seq(X1, X1_prior, y1, X2_train, X2_prior_train,
     return fine_tune_model, inf_enc, inf_dec, fine_tune_history
 
 
+def transfer_train_seq2seq_diff_chans(X1, X1_prior, y1, X2_train,
+                                      X2_prior_train, y2_train, X2_test,
+                                      X2_prior_test, y2_test, train_model,
+                                      new_model, new_enc, new_dec,
+                                      pretrain_epochs=200, conv_epochs=60,
+                                      fine_tune_epochs=540,
+                                      enc_dec_layer_idx=-1):
+    lr = train_model.optimizer.get_config()['learning_rate']
+
+    # pretrain on first subject
+    pretrained_model, _ = train_seq2seq(train_model, X1, X1_prior, y1,
+                                        epochs=pretrain_epochs)
+
+    # create new model with modified input layer and same enc-dec weights
+    copy_applicable_weights(pretrained_model, new_model, optimizer=Adam(lr),
+                            loss='categorical_crossentropy',
+                            metrics=['accuracy'])
+
+    # freeze encoder decoder weights
+    freeze_layer(new_model, enc_dec_layer_idx, optimizer=Adam(lr),
+                 loss='categorical_crossentropy',
+                 metrics=['accuracy'])
+
+    # train convolutional layer on second subject split 1
+    updated_cnn_model, _ = train_seq2seq(new_model, X2_train,
+                                         X2_prior_train, y2_train,
+                                         epochs=conv_epochs)
+
+    # unfreeze encoder decoder weights
+    unfreeze_layer(updated_cnn_model, enc_dec_layer_idx,
+                   optimizer=Adam(lr),
+                   loss='categorical_crossentropy',
+                   metrics=['accuracy'])
+
+    # train on second subject split 2
+    fine_tune_model, fine_tune_history = train_seq2seq(updated_cnn_model,
+                                                       X2_train,
+                                                       X2_prior_train,
+                                                       y2_train,
+                                                       epochs=fine_tune_epochs,
+                                                       validation_data=(
+                                                           [X2_test,
+                                                            X2_prior_test],
+                                                           y2_test))
+
+    return fine_tune_model, new_enc, new_dec, fine_tune_history
+
+
+def copy_applicable_weights(model, new_model, **kwargs):
+    """From https://datascience.stackexchange.com/questions/21734/keras-
+    transfer-learning-changing-input-tensor-shape
+    User: gebbissimo
+    """
+    for layer in new_model.layers:
+        try:
+            layer.set_weights(model.get_layer(name=layer.name).get_weights())
+        except:
+            print("Could not transfer weights for layer {}".format(layer.name))
+    new_model.compile(**kwargs)
+
+
 def freeze_layer(model, layer_idx, **kwargs):
     model.layers[layer_idx].trainable = False
     model.compile(**kwargs)
