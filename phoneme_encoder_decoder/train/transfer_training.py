@@ -60,6 +60,8 @@ def transfer_train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X1,
                                        X1_prior, y1, X2, X2_prior, y2,
                                        train_ind, test_ind, batch_size=200,
                                        **kwargs):
+    train_ind = train_ind.astype(int)
+    test_ind = test_ind.astype(int)
     X2_train, X2_test = X2[train_ind], X2[test_ind]
     X2_prior_train, X2_prior_test = X2_prior[train_ind], X2_prior[test_ind]
     y2_train, y2_test = y2[train_ind], y2[test_ind]
@@ -70,11 +72,12 @@ def transfer_train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X1,
                                               y2_test, train_model,
                                               batch_size=batch_size,
                                               **kwargs)
-    
+
     y_test_fold, y_pred_fold = decode_seq2seq(inf_enc, inf_dec, X2_test,
                                               y2_test)
-    
+
     return transfer_hist, y_test_fold, y_pred_fold
+
 
 def transfer_train_seq2seq(X1, X1_prior, y1, X2_train, X2_prior_train,
                            y2_train, X2_test, X2_prior_test, y2_test,
@@ -150,11 +153,9 @@ def transfer_seq2seq_kfold_diff_chans(train_model, tar_model, tar_enc, tar_dec,
             shuffle_weights(tar_model, weights=init_tar_w)
 
             transfer_hist, y_pred_fold, y_test_fold = \
-                transfer_train_seq2seq_single_fold(train_model, tar_model,
-                                                   tar_enc, tar_dec, X1,
-                                                   X1_prior, y1, X2, X2_prior,
-                                                   y2, train_ind, test_ind,
-                                                   **kwargs)
+                transfer_train_seq2seq_single_fold_diff_chans(
+                    train_model, tar_model, tar_enc, tar_dec, X1, X1_prior, y1,
+                    X2, X2_prior, y2, train_ind, test_ind, **kwargs)
 
             # track history in-place
             track_model_history(histories, transfer_hist)
@@ -166,7 +167,7 @@ def transfer_seq2seq_kfold_diff_chans(train_model, tar_model, tar_enc, tar_dec,
 
 
 def transfer_train_seq2seq_single_fold_diff_chans(train_model, tar_model,
-                                                  tar_enc, tar_dec, X1, 
+                                                  tar_enc, tar_dec, X1,
                                                   X1_prior, y1, X2, X2_prior,
                                                   y2, train_ind, test_ind,
                                                   batch_size=200, **kwargs):
@@ -183,10 +184,10 @@ def transfer_train_seq2seq_single_fold_diff_chans(train_model, tar_model,
                                                          tar_model,
                                                          batch_size=batch_size,
                                                          **kwargs)
-    
+
     y_test_fold, y_pred_fold = decode_seq2seq(tar_enc, tar_dec, X2_test,
                                               y2_test)
-    
+
     return transfer_hist, y_test_fold, y_pred_fold
 
 
@@ -200,7 +201,7 @@ def transfer_train_seq2seq_diff_chans(X1, X1_prior, y1, X2_train,
 
     # pretrain on first subject
     pretrained_model, _ = train_seq2seq(train_model, X1, X1_prior, y1,
-                                        epochs=pretrain_epochs)
+                                        epochs=pretrain_epochs, **kwargs)
 
     # create new model with modified input layer and same enc-dec weights
     copy_applicable_weights(pretrained_model, new_model, optimizer=Adam(lr),
@@ -215,7 +216,7 @@ def transfer_train_seq2seq_diff_chans(X1, X1_prior, y1, X2_train,
     # train convolutional layer on second subject split 1
     updated_cnn_model, _ = train_seq2seq(new_model, X2_train,
                                          X2_prior_train, y2_train,
-                                         epochs=conv_epochs)
+                                         epochs=conv_epochs, **kwargs)
 
     # unfreeze encoder decoder weights
     unfreeze_layer(updated_cnn_model, enc_dec_layer_idx,
@@ -232,7 +233,7 @@ def transfer_train_seq2seq_diff_chans(X1, X1_prior, y1, X2_train,
                                                        validation_data=(
                                                            [X2_test,
                                                             X2_prior_test],
-                                                           y2_test))
+                                                           y2_test), **kwargs)
 
     return fine_tune_model, fine_tune_history
 
