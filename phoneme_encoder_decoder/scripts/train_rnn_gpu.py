@@ -15,14 +15,16 @@ from seq2seq_models.rnn_models import lstm_1Dcnn_model
 from train.train import train_seq2seq_kfold
 from visualization.plot_model_performance import plot_accuracy_loss
 
-HOME_PATH = os.path.expanduser('~')
-DATA_PATH = HOME_PATH + '/workspace/'
-# DATA_PATH = '../data/'
+# HOME_PATH = os.path.expanduser('~')
+# DATA_PATH = HOME_PATH + '/workspace/'
+DATA_PATH = '../data/'
+
+pt = 'S33'
 
 # Load in data from workspace mat files
-hg_trace, hg_map, phon_labels = get_high_gamma_data(DATA_PATH +
-                                                    'S14/S14_HG_sigChannel'
-                                                    '.mat')
+hg_trace, hg_map, phon_labels = get_high_gamma_data(DATA_PATH + pt + '/' +
+                                                    pt + '_HG_all.mat')
+
 n_output = 10
 X = hg_trace  # use HG traces (n_trials, n_channels, n_timepoints) for 1D CNN
 X_prior, y, _, _ = pad_sequence_teacher_forcing(phon_labels, n_output)
@@ -34,7 +36,7 @@ filter_size = 10
 n_filters = 100
 n_units = 800
 reg_lambda = 1e-6
-bidir = False
+bidir = True
 train_model, inf_enc, inf_dec = lstm_1Dcnn_model(n_input_time, n_input_channel,
                                                  n_output, n_filters,
                                                  filter_size, n_units,
@@ -42,23 +44,26 @@ train_model, inf_enc, inf_dec = lstm_1Dcnn_model(n_input_time, n_input_channel,
 
 # Train model
 num_folds = 10
+num_reps = 3
 batch_size = 200
-epochs = 200
-learning_rate = 5e-4
+epochs = 800
+learning_rate = 5e-5
 
 train_model.compile(optimizer=Adam(learning_rate),
                     loss='categorical_crossentropy', metrics=['accuracy'])
+
 histories, y_pred_all, y_test_all = train_seq2seq_kfold(train_model, inf_enc,
                                                         inf_dec, X, X_prior, y,
                                                         num_folds=num_folds,
+                                                        num_reps=num_reps,
                                                         batch_size=batch_size,
                                                         epochs=epochs,
                                                         early_stop=False)
 
 # Save outputs
 b_acc = balanced_accuracy_score(y_test_all, y_pred_all)
-with open(DATA_PATH + 'outputs/train1_b_acc.txt', 'w+') as f:
-    f.write(str(b_acc))
+with open(DATA_PATH + 'outputs/S33_acc.txt', 'a+') as f:
+    f.write(str(b_acc) + '\n')
 
 plot_accuracy_loss(histories, epochs=epochs, save_fig=True,
-                   save_path=DATA_PATH + 'outputs/plots/train1_plot.png')
+                   save_path=DATA_PATH + 'outputs/plots/S33_train_all.png')
