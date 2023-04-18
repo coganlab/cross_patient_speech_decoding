@@ -1,5 +1,5 @@
 """
-Script to train a RNN model on the DCC cluster.
+Script to train a RNN model on the DCC.
 """
 
 import os
@@ -76,7 +76,6 @@ tar_model.compile(optimizer=Adam(learning_rate),
                   loss='categorical_crossentropy', metrics=['accuracy'])
 
 n_iter = 5 # for accuracy distribution
-accs = []
 for i in range(n_iter):
     print('Iteration: ', i+1)
     t_hist, y_pred, y_test = transfer_seq2seq_kfold_diff_chans(
@@ -84,13 +83,12 @@ for i in range(n_iter):
                                 X1, X1_prior, y1, X2, X2_prior, y2,
                                 num_folds=num_folds, num_reps=num_reps)
     b_acc = balanced_accuracy_score(y_test, y_pred)
-    accs.append(b_acc)
+
+    with open(DATA_PATH + 'outputs/transfer_S14-S33_accs.txt', 'a+') as f:
+        f.write(str(b_acc) + '\n')
 
     plot_accuracy_loss(t_hist, epochs=epochs, save_fig=True,
                        save_path=DATA_PATH +
                        f'outputs/plots/transfer_train_S14-S33_{i+1}.png')
 
-# Save outputs
-with open(DATA_PATH + 'outputs/transfer_S14-S33_accs.txt', 'w+') as f:
-    for acc in accs:
-        f.write(str(acc) + '\n')
+        
