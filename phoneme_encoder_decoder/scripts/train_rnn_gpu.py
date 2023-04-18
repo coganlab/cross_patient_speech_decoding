@@ -15,9 +15,9 @@ from seq2seq_models.rnn_models import lstm_1Dcnn_model
 from train.train import train_seq2seq_kfold
 from visualization.plot_model_performance import plot_accuracy_loss
 
-# HOME_PATH = os.path.expanduser('~')
-# DATA_PATH = HOME_PATH + '/workspace/'
-DATA_PATH = '../data/'
+HOME_PATH = os.path.expanduser('~')
+DATA_PATH = HOME_PATH + '/workspace/'
+# DATA_PATH = '../data/'
 
 pt = 'S33'
 
@@ -52,18 +52,22 @@ learning_rate = 5e-5
 train_model.compile(optimizer=Adam(learning_rate),
                     loss='categorical_crossentropy', metrics=['accuracy'])
 
-histories, y_pred_all, y_test_all = train_seq2seq_kfold(train_model, inf_enc,
-                                                        inf_dec, X, X_prior, y,
-                                                        num_folds=num_folds,
-                                                        num_reps=num_reps,
-                                                        batch_size=batch_size,
-                                                        epochs=epochs,
-                                                        early_stop=False)
+n_iter = 5
+for i in range(n_iter):
+    print('Iteration: ', i+1)
+    histories, y_pred_all, y_test_all = train_seq2seq_kfold(train_model, inf_enc,
+                                                            inf_dec, X, X_prior, y,
+                                                            num_folds=num_folds,
+                                                            num_reps=num_reps,
+                                                            batch_size=batch_size,
+                                                            epochs=epochs,
+                                                            early_stop=False)
+    b_acc = balanced_accuracy_score(y_test_all, y_pred_all)
+    with open(DATA_PATH + 'outputs/S33_acc.txt', 'a+') as f:
+        f.write(str(b_acc) + '\n')
 
-# Save outputs
-b_acc = balanced_accuracy_score(y_test_all, y_pred_all)
-with open(DATA_PATH + 'outputs/S33_acc.txt', 'a+') as f:
-    f.write(str(b_acc) + '\n')
+    plot_accuracy_loss(histories, epochs=epochs, save_fig=True,
+                       save_path=DATA_PATH +
+                                 f'outputs/plots/S33_train_all{i+1}.png')
 
-plot_accuracy_loss(histories, epochs=epochs, save_fig=True,
-                   save_path=DATA_PATH + 'outputs/plots/S33_train_all.png')
+
