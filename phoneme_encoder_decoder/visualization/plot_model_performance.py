@@ -81,7 +81,7 @@ def plot_accuracy_loss(cv_histories, epochs=100, save_fig=False,
                  label='Train')
     sns.lineplot(data=train_loss_df, x='epoch', y='val_loss', ax=ax1,
                  color='orange', label='Validation')
-    sns.lineplot(data=train_loss_df, x='epoch', y='seq2eq_val_loss', ax=ax1,
+    sns.lineplot(data=train_loss_df, x='epoch', y='seq2seq_val_loss', ax=ax1,
                  color='red', label='Seq2seq Validation')
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel('Loss')
