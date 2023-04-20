@@ -1,5 +1,5 @@
 """
-Script to train a RNN model on the DCC cluster.
+Script to train a RNN model on the DCC.
 """
 
 import os
@@ -64,10 +64,10 @@ tar_model, tar_enc, tar_dec = lstm_1Dcnn_model(n_input_time,
                                                reg_lambda, bidir=bidir)
 
 # Train model
-num_folds = 2
-num_reps = 1
+num_folds = 10
+num_reps = 3
 batch_size = 200
-epochs = 5
+epochs = 540
 learning_rate = 5e-5
 
 pre_model.compile(optimizer=Adam(learning_rate),
@@ -75,21 +75,20 @@ pre_model.compile(optimizer=Adam(learning_rate),
 tar_model.compile(optimizer=Adam(learning_rate),
                   loss='categorical_crossentropy', metrics=['accuracy'])
 
-n_iter = 2 # for accuracy distribution
-accs = []
+n_iter = 5 # for accuracy distribution
 for i in range(n_iter):
     print('Iteration: ', i+1)
     t_hist, y_pred, y_test = transfer_seq2seq_kfold_diff_chans(
                                 pre_model, tar_model, tar_enc, tar_dec,
                                 X1, X1_prior, y1, X2, X2_prior, y2,
-                                num_fold=num_folds, num_reps=num_reps)
+                                num_folds=num_folds, num_reps=num_reps)
     b_acc = balanced_accuracy_score(y_test, y_pred)
+
+    with open(DATA_PATH + 'outputs/transfer_S14-S33_accs.txt', 'a+') as f:
+        f.write(str(b_acc) + '\n')
 
     plot_accuracy_loss(t_hist, epochs=epochs, save_fig=True,
                        save_path=DATA_PATH +
                        f'outputs/plots/transfer_train_S14-S33_{i+1}.png')
 
-# Save outputs
-with open(DATA_PATH + 'outputs/transfer_S14-S33_accs.txt', 'w+') as f:
-    for acc in accs:
-        f.write(str(acc) + '\n')
+        
