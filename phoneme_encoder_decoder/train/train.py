@@ -11,8 +11,7 @@ from sklearn.model_selection import KFold
 from keras.callbacks import EarlyStopping
 
 
-from processing_utils.sequence_processing import (seq2seq_predict_batch,
-                                                  one_hot_decode_batch)
+from processing_utils.sequence_processing import decode_seq2seq
 from .seq2seq_predict_callback import seq2seq_predict_callback
 
 
@@ -183,34 +182,6 @@ def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
                                               y_test)
 
     return history, y_test_fold, y_pred_fold
-
-
-def decode_seq2seq(inf_enc, inf_dec, X_test, y_test):
-    """Uses trained inference encoder and decoder to predict sequences.
-
-    Args:
-        inf_enc (Functional): Inference encoder model.
-        inf_dec (Functional): Inference decoder model.
-        X_test (ndarray): Test feature data. First dimension should be number
-            of observations. Dimensions should be compatible with the input to
-            the inference encoder.
-        y_test (ndarray): One-hot encoded test labels. First dimension should
-            be number of observations. Second dimension should be length of
-            output sequence.
-
-    Returns:
-        (ndarray, ndarray): 1D array of predicted labels and 1D array of true
-            labels. Length of each array is number of observations times the
-            sequence length.
-    """
-    n_output = inf_dec.output_shape[0][-1]  # number of output classes
-    seq_len = y_test.shape[1]  # length of output sequence
-
-    target = seq2seq_predict_batch(inf_enc, inf_dec, X_test, seq_len,
-                                   n_output)
-    y_pred_dec = np.ravel(one_hot_decode_batch(target))
-    y_test_dec = np.ravel(one_hot_decode_batch(y_test))
-    return y_pred_dec, y_test_dec
 
 
 def train_seq2seq(model, X, X_prior, y, batch_size=200, epochs=800, **kwargs):
