@@ -13,6 +13,7 @@ from keras.callbacks import EarlyStopping
 
 from processing_utils.sequence_processing import (seq2seq_predict_batch,
                                                   one_hot_decode_batch)
+from .seq2seq_predict_callback import seq2seq_predict_callback
 
 
 def shuffle_weights(model, weights=None, layer_idx=None):
@@ -109,8 +110,7 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
         cb = [es]
 
     # dictionary for history of each fold
-    histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
-                 'val_loss': []}
+    histories = {'accuracy': [], 'loss': []}
 
     # cv training
     y_pred_all, y_test_all = [], []
@@ -138,7 +138,7 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
 
 def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
                               train_ind, test_ind, batch_size=200, epochs=800,
-                              **kwargs):
+                              callbacks=None, **kwargs):
     """Implements single fold of cross-validation for seq2seq models.
 
     Args:
@@ -167,10 +167,17 @@ def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
     X_prior_train, X_prior_test = X_prior[train_ind], X_prior[test_ind]
     y_train, y_test = y[train_ind], y[test_ind]
 
+    seq2seq_cb = seq2seq_predict_callback(train_model, inf_enc, inf_dec,
+                                          X_test, y_test)
+    if callbacks is not None:
+        callbacks.append(seq2seq_cb)
+    else:
+        callbacks = [seq2seq_cb]
     _, history = train_seq2seq(train_model, X_train, X_prior_train, y_train,
                                batch_size=batch_size, epochs=epochs,
                                validation_data=([X_test, X_prior_test],
-                                                y_test), **kwargs)
+                                                y_test),
+                               callbacks=callbacks, **kwargs)
 
     y_test_fold, y_pred_fold = decode_seq2seq(inf_enc, inf_dec, X_test,
                                               y_test)
@@ -244,4 +251,6 @@ def track_model_history(hist_dict, history):
         history (Callback): Model training history from keras model fit method.
     """
     for key in history.history.keys():
+        if key not in hist_dict.keys():
+            hist_dict[key] = []
         hist_dict[key].append(history.history[key])
