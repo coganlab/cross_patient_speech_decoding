@@ -18,8 +18,8 @@ class seq2seq_predict_callback(keras.callbacks.Callback):
         self.train_model = train_model
         self.inf_enc = inf_enc
         self.inf_dec = inf_dec
-        self.X = tf.convert_to_tensor(X)
-        self.y = tf.convert_to_tensor(y)
+        self.X = X
+        self.y = y
 
     def on_epoch_end(self, epoch, logs=None):
         loss_fcn = keras.losses.get(self.train_model.loss)

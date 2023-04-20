@@ -76,8 +76,8 @@ def one_hot_decode_batch(encoded_batch):
 
 
 def one_hot_decode_batch_test(encoded_batch):
-    # return np.ravel(np.argmax(encoded_batch, axis=-1))
-    return tf.reshape(tf.math.argmax(encoded_batch, -1), [-1])
+    return np.ravel(np.argmax(encoded_batch, axis=-1))
+    # return tf.reshape(tf.math.argmax(encoded_batch, -1), [-1])
 
 
 def DEPseq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
