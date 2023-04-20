@@ -74,7 +74,7 @@ def one_hot_decode_batch(encoded_batch):
     return [one_hot_decode(enc_seq) for enc_seq in encoded_batch]
 
 
-def seq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
+def DEPseq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
     """Predicts sequence of outputs using inference encoder and decoder models.
     Single trial feature data is passed to inference encoder to generate states
     and states are passed to inference decoder to generate output sequence.
@@ -117,8 +117,8 @@ def seq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
     return np.array(output)
 
 
-def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
-                          verbose=0):
+def DEPseq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
+                             verbose=0):
     """Predicts batch of sequences of outputs using inference encoder and
     decoder models. Calls seq2seq_predict() for each observation in batch.
 
@@ -142,9 +142,27 @@ def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
         # add batch dimension for input match
         curr_trial = np.expand_dims(source[i, :, :], axis=0)
         # appends n_steps probability distributions for each observation
-        output.append(seq2seq_predict(inf_enc, inf_dec, curr_trial, n_steps,
-                                      n_output, verbose=verbose))
+        output.append(DEPseq2seq_predict(inf_enc, inf_dec, curr_trial, n_steps,
+                                         n_output, verbose=verbose))
     return np.array(output)
+
+
+def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
+                          verbose=0):
+    batch_states = inf_enc.predict(source, verbose=verbose)
+
+    batch_target = np.zeros((source.shape[0], 1, n_output))
+    batch_target[:, 0, 0] = 1
+
+    output = np.zeros((source.shape[0], n_steps, n_output))
+    for step in range(n_steps):
+        pred_data = inf_dec.predict([batch_target] + batch_states,
+                                    verbose=verbose)
+        output[:, step, :] = np.squeeze(pred_data[0])
+        batch_states = list(pred_data[1:])
+        batch_target = pred_data[0]
+
+    return output
 
 
 def flatten_fold_preds(preds):
