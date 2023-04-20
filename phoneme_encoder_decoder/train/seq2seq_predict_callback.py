@@ -10,7 +10,7 @@ import tensorflow as tf
 from sklearn.metrics import balanced_accuracy_score
 
 from processing_utils.sequence_processing import (seq2seq_predict_batch,
-                                                  one_hot_decode_batch_test)
+                                                  one_hot_decode_batch)
 
 
 class seq2seq_predict_callback(keras.callbacks.Callback):
@@ -31,8 +31,8 @@ class seq2seq_predict_callback(keras.callbacks.Callback):
                                             seq_len, n_output)
         loss = tf.math.reduce_mean(loss_fcn(self.y, y_pred_dist))
 
-        y_pred = one_hot_decode_batch_test(y_pred_dist)
-        y_test = one_hot_decode_batch_test(self.y)
+        y_pred = one_hot_decode_batch(y_pred_dist)
+        y_test = one_hot_decode_batch(self.y)
         b_acc = balanced_accuracy_score(y_test, y_pred)
 
         logs['seq2seq_val_loss'] = loss
