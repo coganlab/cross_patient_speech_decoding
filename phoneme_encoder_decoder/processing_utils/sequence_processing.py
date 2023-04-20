@@ -46,7 +46,35 @@ def pad_sequence_teacher_forcing(seq_input, n_output):
             np.array(seq_labels))
 
 
-def one_hot_decode(encoded_element):
+def decode_seq2seq(inf_enc, inf_dec, X_test, y_test):
+    """Uses trained inference encoder and decoder to predict sequences.
+
+    Args:
+        inf_enc (Functional): Inference encoder model.
+        inf_dec (Functional): Inference decoder model.
+        X_test (ndarray): Test feature data. First dimension should be number
+            of observations. Dimensions should be compatible with the input to
+            the inference encoder.
+        y_test (ndarray): One-hot encoded test labels. First dimension should
+            be number of observations. Second dimension should be length of
+            output sequence.
+
+    Returns:
+        (ndarray, ndarray): 1D array of predicted labels and 1D array of true
+            labels. Length of each array is number of observations times the
+            sequence length.
+    """
+    n_output = inf_dec.output_shape[0][-1]  # number of output classes
+    seq_len = y_test.shape[1]  # length of output sequence
+
+    target = seq2seq_predict_batch(inf_enc, inf_dec, X_test, seq_len,
+                                   n_output)
+    y_pred_dec = one_hot_decode_batch(target)
+    y_test_dec = one_hot_decode_batch(y_test)
+    return y_pred_dec, y_test_dec
+
+
+def DEPone_hot_decode(encoded_element):
     """Decodes a sequence of one-hot encoded vectors into a sequence of
     integers. Uses argmax to determine index of 1 in each one-hot vector.
 
@@ -60,7 +88,7 @@ def one_hot_decode(encoded_element):
     return [np.argmax(vector) for vector in encoded_element]
 
 
-def one_hot_decode_batch(encoded_batch):
+def DEPone_hot_decode_batch(encoded_batch):
     """Decodes a batch of one-hot encoded sequences into a batch of sequences
     of integers.
 
@@ -72,10 +100,10 @@ def one_hot_decode_batch(encoded_batch):
         list: Batch of decoded sequences of integers. Shape = (n_trials,
             sequence length)
     """
-    return [one_hot_decode(enc_seq) for enc_seq in encoded_batch]
+    return [DEPone_hot_decode(enc_seq) for enc_seq in encoded_batch]
 
 
-def one_hot_decode_batch_test(encoded_batch):
+def one_hot_decode_batch(encoded_batch):
     return np.ravel(np.argmax(encoded_batch, axis=-1))
     # return tf.reshape(tf.math.argmax(encoded_batch, -1), [-1])
 
