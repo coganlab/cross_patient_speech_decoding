@@ -6,6 +6,7 @@ Adapted from code by Kumar Duraivel
 """
 
 import numpy as np
+import tensorflow as tf
 from keras.utils import to_categorical
 
 
@@ -72,6 +73,10 @@ def one_hot_decode_batch(encoded_batch):
             sequence length)
     """
     return [one_hot_decode(enc_seq) for enc_seq in encoded_batch]
+
+
+def one_hot_decode_batch_test(encoded_batch):
+    return np.ravel(np.argmax(encoded_batch, axis=-1))
 
 
 def DEPseq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
@@ -149,18 +154,19 @@ def DEPseq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
 
 def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
                           verbose=0):
-    batch_states = inf_enc.predict(source, verbose=verbose)
+    batch_states = inf_enc.predict_on_batch(source)
+    batch_states = [tf.convert_to_tensor(s) for s in batch_states]
 
-    batch_target = np.zeros((source.shape[0], 1, n_output))
-    batch_target[:, 0, 0] = 1
+    batch_target = tf.Variable(tf.zeros((source.shape[0], 1, n_output)))
+    batch_target = batch_target[:, 0, 0].assign(1)
+    # batch_target[:, 0, 0] = 1
 
-    output = np.zeros((source.shape[0], n_steps, n_output))
+    output = tf.Variable(tf.zeros((source.shape[0], n_steps, n_output)))
     for step in range(n_steps):
-        pred_data = inf_dec.predict([batch_target] + batch_states,
-                                    verbose=verbose)
-        output[:, step, :] = np.squeeze(pred_data[0])
-        batch_states = list(pred_data[1:])
-        batch_target = pred_data[0]
+        pred_data = inf_dec.predict_on_batch([batch_target] + batch_states)
+        batch_target = tf.convert_to_tensor(pred_data[0])
+        output = output[:, step, :].assign(tf.squeeze(batch_target))
+        batch_states = [tf.convert_to_tensor(s) for s in pred_data[1:]]
 
     return output
 
