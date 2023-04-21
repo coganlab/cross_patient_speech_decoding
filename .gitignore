@@ -1,6 +1,7 @@
 .vscode
 *.mat
 data/
+dcc_shell_scripts/
 
 ##### Default Python gitignore #####
 
