@@ -6,6 +6,7 @@ Adapted from code by Kumar Duraivel
 """
 
 import numpy as np
+import tensorflow as tf
 from keras.utils import to_categorical
 
 
@@ -45,7 +46,35 @@ def pad_sequence_teacher_forcing(seq_input, n_output):
             np.array(seq_labels))
 
 
-def one_hot_decode(encoded_element):
+def decode_seq2seq(inf_enc, inf_dec, X_test, y_test):
+    """Uses trained inference encoder and decoder to predict sequences.
+
+    Args:
+        inf_enc (Functional): Inference encoder model.
+        inf_dec (Functional): Inference decoder model.
+        X_test (ndarray): Test feature data. First dimension should be number
+            of observations. Dimensions should be compatible with the input to
+            the inference encoder.
+        y_test (ndarray): One-hot encoded test labels. First dimension should
+            be number of observations. Second dimension should be length of
+            output sequence.
+
+    Returns:
+        (ndarray, ndarray): 1D array of predicted labels and 1D array of true
+            labels. Length of each array is number of observations times the
+            sequence length.
+    """
+    n_output = inf_dec.output_shape[0][-1]  # number of output classes
+    seq_len = y_test.shape[1]  # length of output sequence
+
+    target = seq2seq_predict_batch(inf_enc, inf_dec, X_test, seq_len,
+                                   n_output)
+    y_pred_dec = one_hot_decode_batch(target)
+    y_test_dec = one_hot_decode_batch(y_test)
+    return y_pred_dec, y_test_dec
+
+
+def DEPone_hot_decode(encoded_element):
     """Decodes a sequence of one-hot encoded vectors into a sequence of
     integers. Uses argmax to determine index of 1 in each one-hot vector.
 
@@ -59,7 +88,7 @@ def one_hot_decode(encoded_element):
     return [np.argmax(vector) for vector in encoded_element]
 
 
-def one_hot_decode_batch(encoded_batch):
+def DEPone_hot_decode_batch(encoded_batch):
     """Decodes a batch of one-hot encoded sequences into a batch of sequences
     of integers.
 
@@ -71,10 +100,15 @@ def one_hot_decode_batch(encoded_batch):
         list: Batch of decoded sequences of integers. Shape = (n_trials,
             sequence length)
     """
-    return [one_hot_decode(enc_seq) for enc_seq in encoded_batch]
+    return [DEPone_hot_decode(enc_seq) for enc_seq in encoded_batch]
 
 
-def seq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
+def one_hot_decode_batch(encoded_batch):
+    return np.ravel(np.argmax(encoded_batch, axis=-1))
+    # return tf.reshape(tf.math.argmax(encoded_batch, -1), [-1])
+
+
+def DEPseq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
     """Predicts sequence of outputs using inference encoder and decoder models.
     Single trial feature data is passed to inference encoder to generate states
     and states are passed to inference decoder to generate output sequence.
@@ -117,8 +151,8 @@ def seq2seq_predict(inf_enc, inf_dec, source, n_steps, n_output, verbose=0):
     return np.array(output)
 
 
-def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
-                          verbose=0):
+def DEPseq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
+                             verbose=0):
     """Predicts batch of sequences of outputs using inference encoder and
     decoder models. Calls seq2seq_predict() for each observation in batch.
 
@@ -142,9 +176,28 @@ def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
         # add batch dimension for input match
         curr_trial = np.expand_dims(source[i, :, :], axis=0)
         # appends n_steps probability distributions for each observation
-        output.append(seq2seq_predict(inf_enc, inf_dec, curr_trial, n_steps,
-                                      n_output, verbose=verbose))
+        output.append(DEPseq2seq_predict(inf_enc, inf_dec, curr_trial, n_steps,
+                                         n_output, verbose=verbose))
     return np.array(output)
+
+
+def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
+                          verbose=0):
+    batch_states = inf_enc.predict_on_batch(source)
+    batch_states = [tf.convert_to_tensor(s) for s in batch_states]
+
+    batch_target = tf.Variable(tf.zeros((source.shape[0], 1, n_output)))
+    batch_target = batch_target[:, 0, 0].assign(1)
+    # batch_target[:, 0, 0] = 1
+
+    output = tf.Variable(tf.zeros((source.shape[0], n_steps, n_output)))
+    for step in range(n_steps):
+        pred_data = inf_dec.predict_on_batch([batch_target] + batch_states)
+        batch_target = tf.convert_to_tensor(pred_data[0])
+        output = output[:, step, :].assign(tf.squeeze(batch_target))
+        batch_states = [tf.convert_to_tensor(s) for s in pred_data[1:]]
+
+    return output
 
 
 def flatten_fold_preds(preds):
