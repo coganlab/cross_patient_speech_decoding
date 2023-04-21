@@ -75,9 +75,9 @@ def train_rnn():
     n_input_time = X.shape[1]
     n_input_channel = X.shape[2]
     filter_size = 10
-    n_filters = 100
-    n_units = 800
-    reg_lambda = 1e-6
+    n_filters = 100  # S14=100, S26=90
+    n_units = 800  # S14=800, S26=900
+    reg_lambda = 1e-6  # S14=1e-6, S26=1e-5
     bidir = True
 
     # Train model
@@ -131,7 +131,7 @@ def train_rnn():
 
         with open(DATA_PATH + f'outputs/{pt}_acc.txt', 'a+') as f:
             f.write(f'Final validation accuracy: {val_acc}, '
-                    f'Final test accuracy{test_acc}' + '\n')
+                    f'Final test accuracy: {test_acc}' + '\n')
 
         plot_accuracy_loss(histories, epochs=epochs, save_fig=True,
                            save_path=DATA_PATH +
