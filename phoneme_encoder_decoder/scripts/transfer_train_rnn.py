@@ -15,8 +15,7 @@ from processing_utils.feature_data_from_mat import get_high_gamma_data
 from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
                                                   decode_seq2seq)
 from seq2seq_models.rnn_models import lstm_1Dcnn_model
-from train.transfer_training import (transfer_seq2seq_kfold,
-                                     transfer_seq2seq_kfold_diff_chans)
+from train.transfer_training import transfer_seq2seq_kfold_diff_chans
 from visualization.plot_model_performance import plot_accuracy_loss
 
 
@@ -143,7 +142,10 @@ def transfer_train_rnn():
                                     pre_model, tar_model, tar_enc, tar_dec,
                                     X1, X1_prior, y1, X2_train, X2_prior_train,
                                     y2_train, num_folds=num_folds,
-                                    num_reps=num_reps)
+                                    batch_size=batch_size,
+                                    fine_tune_epochs=epochs,
+                                    num_reps=num_reps,
+                                    verbose=verbose)
 
         # final val acc - preds from inf decoder across all folds
         val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
