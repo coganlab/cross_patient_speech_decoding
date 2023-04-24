@@ -57,7 +57,7 @@ def train_rnn():
         DATA_PATH = '../data/'
 
     print('==================================================================')
-    print("Training models for patient %s." % inputs['patient'])
+    print("Training models for patient %s." % pt)
     print("Getting data from %s." % (DATA_PATH + f'{pt}/'))
     print("Saving outputs to %s." % (DATA_PATH + 'outputs/'))
     print('==================================================================')
