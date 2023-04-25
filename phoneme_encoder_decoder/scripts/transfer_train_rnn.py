@@ -20,7 +20,7 @@ from visualization.plot_model_performance import plot_accuracy_loss
 
 
 def init_parser():
-    parser = argparse.ArgumentParser(description='Train RNN model on DCC')
+    parser = argparse.ArgumentParser(description='Transfer train RNN on DCC')
     parser.add_argument('-p', '--pretrain_patient', type=str, default='S14',
                         required=False, help='Pretrain Patient ID')
     parser.add_argument('-t', '--transfer_patient', type=str, default='S33',
