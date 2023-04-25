@@ -15,6 +15,11 @@ def combine_transfer_single(transfer_data, single_data):
     return transfer_mean
 
 
+def transform_col_by_diag(data):
+    diag = np.diag(data)
+    return data - diag
+
+
 def heatmap(data, row_labels, col_labels, ax=None,
             cbar_kw=None, cbarlabel="", **kwargs):
     """
