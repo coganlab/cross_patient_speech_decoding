@@ -175,15 +175,24 @@ def transfer_train_seq2seq_single_fold_diff_chans(train_model, tar_model,
     X2_prior_train, X2_prior_test = X2_prior[train_ind], X2_prior[test_ind]
     y2_train, y2_test = y2[train_ind], y2[test_ind]
 
-    _, transfer_hist = transfer_train_seq2seq_diff_chans(X1, X1_prior, y1,
+    seq2seq_cb = seq2seq_predict_callback(train_model, tar_enc, tar_dec,
+                                          X2_test, y2_test)
+    if callbacks is not None:
+        callbacks.append(seq2seq_cb)
+    else:
+        callbacks = [seq2seq_cb]
+
+    _, transfer_hist = transfer_train_seq2seq_diff_chans(train_model,
+                                                         tar_model,
+                                                         X1, X1_prior, y1,
                                                          X2_train,
                                                          X2_prior_train,
-                                                         y2_train, X2_test,
-                                                         X2_prior_test,
-                                                         y2_test, train_model,
-                                                         tar_model, tar_enc,
-                                                         tar_dec,
+                                                         y2_train, 
+                                                         val_data = ([X2_test,
+                                                         X2_prior_test],
+                                                         y2_test),
                                                          batch_size=batch_size,
+                                                         callbacks=callbacks,
                                                          **kwargs)
 
     y_test_fold, y_pred_fold = decode_seq2seq(tar_enc, tar_dec, X2_test,
@@ -192,23 +201,13 @@ def transfer_train_seq2seq_single_fold_diff_chans(train_model, tar_model,
     return transfer_hist, y_test_fold, y_pred_fold
 
 
-def transfer_train_seq2seq_diff_chans(X1, X1_prior, y1, X2_train,
-                                      X2_prior_train, y2_train, X2_test,
-                                      X2_prior_test, y2_test, train_model,
-                                      tar_model, tar_enc, tar_dec,
-                                      pretrain_epochs=200,
-                                      conv_epochs=60, fine_tune_epochs=540,
-                                      enc_dec_layer_idx=-1,
-                                      callbacks=None,
-                                      **kwargs):
+def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
+                                      X2_train, X2_prior_train, y2_train,
+                                      pretrain_epochs=200, conv_epochs=60,
+                                      fine_tune_epochs=540,
+                                      enc_dec_layer_idx=-1, callbacks=None,
+                                      val_data = None, **kwargs):
     lr = train_model.optimizer.get_config()['learning_rate']
-
-    seq2seq_cb = seq2seq_predict_callback(train_model, tar_enc, tar_dec,
-                                          X2_test, y2_test)
-    if callbacks is not None:
-        callbacks.append(seq2seq_cb)
-    else:
-        callbacks = [seq2seq_cb]
 
     # pretrain on first subject
     pretrained_model, _ = train_seq2seq(train_model, X1, X1_prior, y1,
@@ -236,17 +235,15 @@ def transfer_train_seq2seq_diff_chans(X1, X1_prior, y1, X2_train,
                    metrics=['accuracy'])
 
     # train on second subject split 2
-    fine_tune_model, fine_tune_history = train_seq2seq(updated_cnn_model,
-                                                       X2_train,
-                                                       X2_prior_train,
-                                                       y2_train,
-                                                       epochs=fine_tune_epochs,
-                                                       validation_data=(
-                                                           [X2_test,
-                                                            X2_prior_test],
-                                                           y2_test),
-                                                       callbacks=callbacks,
-                                                       **kwargs)
+    fine_tune_model, fine_tune_history = train_seq2seq(
+                                            updated_cnn_model,
+                                            X2_train,
+                                            X2_prior_train,
+                                            y2_train,
+                                            epochs=fine_tune_epochs,
+                                            validation_data=val_data,
+                                            callbacks=callbacks,
+                                            **kwargs)
 
     return fine_tune_model, fine_tune_history
 
