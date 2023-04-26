@@ -134,15 +134,15 @@ def train_rnn():
         with open(DATA_PATH + f'outputs/{pt}_acc.txt', 'a+') as f:
             # f.write(f'Final validation accuracy: {val_acc}, '
             #         f'Final test accuracy: {test_acc}, '
-            #         f'True labels: {labels_test}, ' 
+            #         f'True labels: {labels_test}, '
             #         f'Predicted labels: {y_pred_test}' + '\n')
             f.write(f'Final test accuracy: {test_acc}, '
-                    f'True labels: {labels_test}, ' 
+                    f'True labels: {labels_test}, '
                     f'Predicted labels: {y_pred_test}' + '\n')
 
-        plot_accuracy_loss(histories, epochs=epochs, save_fig=True,
-                           save_path=DATA_PATH +
-                           f'outputs/plots/{pt}_train_all_{i+1}.png')
+        # plot_accuracy_loss(histories, epochs=epochs, save_fig=True,
+        #                    save_path=DATA_PATH +
+        #                    f'outputs/plots/{pt}_train_all_{i+1}.png')
 
 
 if __name__ == '__main__':
