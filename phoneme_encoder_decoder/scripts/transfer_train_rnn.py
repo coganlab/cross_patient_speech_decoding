@@ -153,7 +153,8 @@ def transfer_train_rnn():
                                                       X2_train,
                                                       X2_prior_train,
                                                       y2_train,
-                                                      fine_tune_epochs=epochs)
+                                                      fine_tune_epochs=epochs,
+                                                      verbose=verbose)
 
         # # final val acc - preds from inf decoder across all folds
         # val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
