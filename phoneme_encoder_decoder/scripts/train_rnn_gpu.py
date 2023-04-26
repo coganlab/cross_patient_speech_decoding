@@ -4,6 +4,7 @@ Script to train a RNN model on the DCC.
 
 import os
 import sys
+import csv
 import argparse
 from keras.optimizers import Adam
 from sklearn.model_selection import ShuffleSplit
@@ -131,14 +132,21 @@ def train_rnn():
                                                   y_test)
         test_acc = balanced_accuracy_score(labels_test, y_pred_test)
 
-        with open(DATA_PATH + f'outputs/{pt}_acc.txt', 'a+') as f:
-            # f.write(f'Final validation accuracy: {val_acc}, '
-            #         f'Final test accuracy: {test_acc}, '
-            #         f'True labels: {labels_test}, '
-            #         f'Predicted labels: {y_pred_test}' + '\n')
-            f.write(f'Final test accuracy: {test_acc}, '
-                    f'True labels: {labels_test}, '
-                    f'Predicted labels: {y_pred_test}' + '\n')
+        # with open(DATA_PATH + f'outputs/{pt}_acc.txt', 'a+') as f:
+        #     # f.write(f'Final validation accuracy: {val_acc}, '
+        #     #         f'Final test accuracy: {test_acc}, '
+        #     #         f'True labels: {labels_test}, '
+        #     #         f'Predicted labels: {y_pred_test}' + '\n')
+        #     f.write(f'Final test accuracy: {test_acc}, '
+        #             f'True labels: {labels_test}, '
+        #             f'Predicted labels: {y_pred_test}' + '\n')
+        field_names = ['test_acc', 'labels_test', 'y_pred_test']
+        with open(DATA_PATH + f'outputs/{pt}_acc.csv', 'a+', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=field_names)
+            # writer.writerow([test_acc] + labels_test + y_pred_test)
+            # writer.writeheader()
+            writer.writerow({'test_acc': test_acc, 'labels_test': labels_test,
+                             'y_pred_test': y_pred_test})
 
         # plot_accuracy_loss(histories, epochs=epochs, save_fig=True,
         #                    save_path=DATA_PATH +
