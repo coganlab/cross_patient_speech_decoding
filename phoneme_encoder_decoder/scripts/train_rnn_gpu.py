@@ -15,7 +15,7 @@ from processing_utils.feature_data_from_mat import get_high_gamma_data
 from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
                                                   decode_seq2seq)
 from seq2seq_models.rnn_models import lstm_1Dcnn_model
-from train.train import train_seq2seq_kfold
+from train.train import train_seq2seq_kfold, train_seq2seq
 from visualization.plot_model_performance import plot_accuracy_loss
 
 
@@ -111,18 +111,20 @@ def train_rnn():
                             loss='categorical_crossentropy',
                             metrics=['accuracy'])
 
-        histories, y_pred_all, y_test_all = train_seq2seq_kfold(
-                                                train_model, inf_enc, inf_dec,
-                                                X_train, X_prior_train,
-                                                y_train, num_folds=num_folds,
-                                                num_reps=num_reps,
-                                                batch_size=batch_size,
-                                                epochs=epochs,
-                                                early_stop=False,
-                                                verbose=verbose)
+        # histories, y_pred_all, y_test_all = train_seq2seq_kfold(
+        #                                         train_model, inf_enc, inf_dec,
+        #                                         X_train, X_prior_train,
+        #                                         y_train, num_folds=num_folds,
+        #                                         num_reps=num_reps,
+        #                                         batch_size=batch_size,
+        #                                         epochs=epochs,
+        #                                         early_stop=False,
+        #                                         verbose=verbose)
+        _, histories = train_seq2seq(train_model, X_train, X_prior_train,
+                                     y_train, epochs=epochs, verbose=verbose)
 
         # final val acc - preds from inf decoder across all folds
-        val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
+        # val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
 
         # test acc
         y_pred_test, labels_test = decode_seq2seq(inf_enc, inf_dec, X_test,
@@ -130,14 +132,17 @@ def train_rnn():
         test_acc = balanced_accuracy_score(labels_test, y_pred_test)
 
         with open(DATA_PATH + f'outputs/{pt}_acc.txt', 'a+') as f:
-            f.write(f'Final validation accuracy: {val_acc}, '
-                    f'Final test accuracy: {test_acc}, '
-                    f'True labels: {labels_test}, ' 
+            # f.write(f'Final validation accuracy: {val_acc}, '
+            #         f'Final test accuracy: {test_acc}, '
+            #         f'True labels: {labels_test}, '
+            #         f'Predicted labels: {y_pred_test}' + '\n')
+            f.write(f'Final test accuracy: {test_acc}, '
+                    f'True labels: {labels_test}, '
                     f'Predicted labels: {y_pred_test}' + '\n')
 
-        plot_accuracy_loss(histories, epochs=epochs, save_fig=True,
-                           save_path=DATA_PATH +
-                           f'outputs/plots/{pt}_train_all_{i+1}.png')
+        # plot_accuracy_loss(histories, epochs=epochs, save_fig=True,
+        #                    save_path=DATA_PATH +
+        #                    f'outputs/plots/{pt}_train_all_{i+1}.png')
 
 
 if __name__ == '__main__':
