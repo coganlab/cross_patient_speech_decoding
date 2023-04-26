@@ -169,7 +169,8 @@ def transfer_train_seq2seq_single_fold_diff_chans(train_model, tar_model,
                                                   tar_enc, tar_dec, X1,
                                                   X1_prior, y1, X2, X2_prior,
                                                   y2, train_ind, test_ind,
-                                                  batch_size=200, 
+                                                  batch_size=200,
+                                                  callbacks = None, 
                                                   **kwargs):
     X2_train, X2_test = X2[train_ind], X2[test_ind]
     X2_prior_train, X2_prior_test = X2_prior[train_ind], X2_prior[test_ind]
