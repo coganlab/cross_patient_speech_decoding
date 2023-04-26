@@ -4,6 +4,7 @@ Script to train a RNN model on the DCC.
 
 import os
 import sys
+import csv
 import argparse
 from keras.optimizers import Adam
 from sklearn.model_selection import ShuffleSplit
@@ -15,7 +16,7 @@ from processing_utils.feature_data_from_mat import get_high_gamma_data
 from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
                                                   decode_seq2seq)
 from seq2seq_models.rnn_models import lstm_1Dcnn_model
-from train.transfer_training import transfer_seq2seq_kfold_diff_chans
+from train.transfer_training import transfer_train_seq2seq_diff_chans
 from visualization.plot_model_performance import plot_accuracy_loss
 
 
@@ -138,32 +139,47 @@ def transfer_train_rnn():
                           loss='categorical_crossentropy',
                           metrics=['accuracy'])
 
-        t_hist, y_pred_all, y_test_all = transfer_seq2seq_kfold_diff_chans(
-                                    pre_model, tar_model, tar_enc, tar_dec,
-                                    X1, X1_prior, y1, X2_train, X2_prior_train,
-                                    y2_train, num_folds=num_folds,
-                                    batch_size=batch_size,
-                                    fine_tune_epochs=epochs,
-                                    num_reps=num_reps,
-                                    verbose=verbose)
+        # t_hist, y_pred_all, y_test_all = transfer_seq2seq_kfold_diff_chans(
+        #                             pre_model, tar_model, tar_enc, tar_dec,
+        #                             X1, X1_prior, y1, X2_train, X2_prior_train,
+        #                             y2_train, num_folds=num_folds,
+        #                             batch_size=batch_size,
+        #                             fine_tune_epochs=epochs,
+        #                             num_reps=num_reps,
+        #                             verbose=verbose)
 
-        # final val acc - preds from inf decoder across all folds
-        val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
+        _, t_hist = transfer_train_seq2seq_diff_chans(pre_model, tar_model,
+                                                      X1, X1_prior, y1,
+                                                      X2_train,
+                                                      X2_prior_train,
+                                                      y2_train,
+                                                      fine_tune_epochs=epochs)
+
+        # # final val acc - preds from inf decoder across all folds
+        # val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
 
         # test acc
         y_pred_test, labels_test = decode_seq2seq(tar_enc, tar_dec, X2_test,
                                                   y2_test)
         test_acc = balanced_accuracy_score(labels_test, y_pred_test)
 
+        # with open(DATA_PATH + f'outputs/transfer_{pretrain_pt}-{transfer_pt}'
+        #           '_acc.txt', 'a+') as f:
+        #     f.write(f'Final validation accuracy: {val_acc}, '
+        #             f'Final test accuracy: {test_acc}' + '\n')
+        field_names = ['test_acc', 'labels_test', 'y_pred_test']
         with open(DATA_PATH + f'outputs/transfer_{pretrain_pt}-{transfer_pt}'
-                  '_acc.txt', 'a+') as f:
-            f.write(f'Final validation accuracy: {val_acc}, '
-                    f'Final test accuracy: {test_acc}' + '\n')
+                  '_acc.csv', 'a+', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=field_names)
+            # writer.writerow([test_acc] + labels_test + y_pred_test)
+            # writer.writeheader()
+            writer.writerow({'test_acc': test_acc, 'labels_test': labels_test,
+                             'y_pred_test': y_pred_test})
 
-        plot_accuracy_loss(t_hist, epochs=epochs, save_fig=True,
-                           save_path=DATA_PATH +
-                           'outputs/plots/transfer_'
-                           f'{pretrain_pt}-{transfer_pt}_train_all_{i+1}.png')
+        # plot_accuracy_loss(t_hist, epochs=epochs, save_fig=True,
+        #                    save_path=DATA_PATH +
+        #                    'outputs/plots/transfer_'
+        #                    f'{pretrain_pt}-{transfer_pt}_train_all_{i+1}.png')
 
 
 if __name__ == '__main__':
