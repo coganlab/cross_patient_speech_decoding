@@ -26,9 +26,12 @@ def init_parser():
                         required=False, help='Pretrain Patient ID')
     parser.add_argument('-t', '--transfer_patient', type=str, default='S33',
                         required=False, help='Transfer Patient ID')
-    parser.add_argument('-sig', '--use_sig_channels', type=str, default='True',
+    parser.add_argument('-s', '--sig_channels', type=str, default='True',
                         required=False, help='Use significant channels (True)'
                         'or all channels (False)')
+    parser.add_argument('-z', '--z_score', type=str, default='False',
+                        required=False, help='Z-score normalization (True)'
+                        'or mean-subtracted normalization (False)')
     parser.add_argument('-n', '--num_iter', type=int, default=5,
                         required=False, help='Number of times to run model')
     parser.add_argument('-v', '--verbose', type=int, default=1,
@@ -36,7 +39,14 @@ def init_parser():
     parser.add_argument('-c', '--cluster', type=str, default='True',
                         required=False,
                         help='Run on cluster (True) or local (False)')
+    parser.add_argument('-o', '--out_filename', type=str, default='',
+                        required=False,
+                        help='Output filename for accuracy csv')
     return parser
+
+
+def str2bool(s):
+    return s.lower() == 'true'
 
 
 def transfer_train_rnn():
@@ -50,12 +60,13 @@ def transfer_train_rnn():
 
     pretrain_pt = inputs['pretrain_patient']
     transfer_pt = inputs['transfer_patient']
-    chan_ext = 'sigChannel' if inputs['use_sig_channels'] else 'all'
+    chan_ext = '_sigChannel' if str2bool(inputs['sig_channels']) else '_all'
+    norm_ext = '_zscore' if str2bool(inputs['z_score']) else ''
     n_iter = inputs['num_iter']
     verbose = inputs['verbose']
-    cluster = inputs['cluster']
+    cluster = str2bool(inputs['cluster'])
 
-    if cluster.lower() == 'true':
+    if cluster:
         HOME_PATH = os.path.expanduser('~')
         DATA_PATH = HOME_PATH + '/workspace/'
     else:
@@ -73,14 +84,18 @@ def transfer_train_rnn():
     pre_hg_trace, pre_hg_map, pre_phon_labels = get_high_gamma_data(
                                                     DATA_PATH +
                                                     f'{pretrain_pt}/'
-                                                    f'{pretrain_pt}_HG_'
-                                                    f'{chan_ext}.mat')
+                                                    f'{pretrain_pt}_HG'
+                                                    f'{chan_ext}'
+                                                    f'{norm_ext}'
+                                                    '.mat')
 
     tar_hg_trace, tar_hg_map, tar_phon_labels = get_high_gamma_data(
                                                     DATA_PATH +
                                                     f'{transfer_pt}/'
-                                                    f'{transfer_pt}_HG_'
-                                                    f'{chan_ext}.mat')
+                                                    f'{transfer_pt}_HG'
+                                                    f'{chan_ext}'
+                                                    f'{norm_ext}'
+                                                    '.mat')
 
     n_output = 10
     X1 = pre_hg_trace  # (n_trials, n_channels, n_timepoints) for 1D CNN
@@ -97,7 +112,7 @@ def transfer_train_rnn():
     n_input_channel_trans = X2.shape[2]
     filter_size = 10
     n_filters = 100  # S14=100, S26=90
-    n_units = 800  # S14=800, S26=900
+    n_units = 256  # S14=800, S26=900
     reg_lambda = 1e-6  # S14=1e-6, S26=1e-5
     bidir = True
 
@@ -125,12 +140,14 @@ def transfer_train_rnn():
                                                        n_input_channel_pre,
                                                        n_output, n_filters,
                                                        filter_size, n_units,
-                                                       reg_lambda, bidir=bidir)
+                                                       reg_lambda, bidir=bidir,
+                                                       dropout=0.33)
         tar_model, tar_enc, tar_dec = lstm_1Dcnn_model(n_input_time,
                                                        n_input_channel_trans,
                                                        n_output, n_filters,
                                                        filter_size, n_units,
-                                                       reg_lambda, bidir=bidir)
+                                                       reg_lambda, bidir=bidir,
+                                                       dropout=0.33)
 
         pre_model.compile(optimizer=Adam(learning_rate),
                           loss='categorical_crossentropy',
@@ -169,8 +186,14 @@ def transfer_train_rnn():
         #     f.write(f'Final validation accuracy: {val_acc}, '
         #             f'Final test accuracy: {test_acc}' + '\n')
         field_names = ['test_acc', 'labels_test', 'y_pred_test']
-        with open(DATA_PATH + f'outputs/transfer_{pretrain_pt}-{transfer_pt}'
-                  '_acc.csv', 'a+', newline='') as f:
+        if inputs['out_filename'] != '':
+            acc_filename = DATA_PATH + 'outputs/' + inputs['out_filename'] \
+                           + '.csv'
+        else:
+            acc_filename = DATA_PATH + ('outputs/transfer_'
+                                       f'{pretrain_pt}-{transfer_pt}'
+                                       f'{norm_ext}_acc.csv')
+        with open(acc_filename, 'a+', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=field_names)
             # writer.writerow([test_acc] + labels_test + y_pred_test)
             # writer.writeheader()
