@@ -24,9 +24,12 @@ def init_parser():
     parser = argparse.ArgumentParser(description='Train RNN model on DCC')
     parser.add_argument('-pt', '--patient', type=str, default='S14',
                         required=False, help='Patient ID')
-    parser.add_argument('-sig', '--use_sig_channels', type=str, default='True',
+    parser.add_argument('-s', '--sig_channels', type=str, default='True',
                         required=False, help='Use significant channels (True)'
                         'or all channels (False)')
+    parser.add_argument('-z', '--z_score', type=str, default='False',
+                        required=False, help='Z-score normalization (True)'
+                        'or mean-subtracted normalization (False)')
     parser.add_argument('-n', '--num_iter', type=int, default=5,
                         required=False, help='Number of times to run model')
     parser.add_argument('-v', '--verbose', type=int, default=1,
@@ -34,7 +37,14 @@ def init_parser():
     parser.add_argument('-c', '--cluster', type=str, default='True',
                         required=False,
                         help='Run on cluster (True) or local (False)')
+    parser.add_argument('-o', '--out_filename', type=str, default='',
+                        required=False,
+                        help='Output filename for accuracy csv')
     return parser
+
+
+def str2bool(s):
+    return s.lower() == 'true'
 
 
 def train_rnn():
@@ -46,12 +56,13 @@ def train_rnn():
         inputs[key] = val
 
     pt = inputs['patient']
-    chan_ext = 'sigChannel' if inputs['use_sig_channels'] else 'all'
+    chan_ext = '_sigChannel' if str2bool(inputs['sig_channels']) else '_all'
+    norm_ext = '_zscore' if str2bool(inputs['z_score']) else ''
     n_iter = inputs['num_iter']
     verbose = inputs['verbose']
-    cluster = inputs['cluster']
+    cluster = str2bool(inputs['cluster'])
 
-    if cluster.lower() == 'true':
+    if cluster:
         HOME_PATH = os.path.expanduser('~')
         DATA_PATH = HOME_PATH + '/workspace/'
     else:
@@ -65,8 +76,10 @@ def train_rnn():
 
     # Load in data from workspace mat files
     hg_trace, hg_map, phon_labels = get_high_gamma_data(DATA_PATH +
-                                                        f'{pt}/{pt}_HG_'
-                                                        f'{chan_ext}.mat')
+                                                        f'{pt}/{pt}_HG'
+                                                        f'{chan_ext}'
+                                                        f'{norm_ext}'
+                                                        '.mat')
 
     n_output = 10
     X = hg_trace  # use HG traces (n_trials, n_channels, n_timepoints) for CNN
@@ -77,7 +90,7 @@ def train_rnn():
     n_input_channel = X.shape[2]
     filter_size = 10
     n_filters = 100  # S14=100, S26=90
-    n_units = 800  # S14=800, S26=900
+    n_units = 256  # S14=800, S26=900
     reg_lambda = 1e-6  # S14=1e-6, S26=1e-5
     bidir = True
 
@@ -106,7 +119,8 @@ def train_rnn():
                                                          n_output, n_filters,
                                                          filter_size, n_units,
                                                          reg_lambda,
-                                                         bidir=bidir)
+                                                         bidir=bidir,
+                                                         dropout=0.33)
 
         train_model.compile(optimizer=Adam(learning_rate),
                             loss='categorical_crossentropy',
@@ -141,7 +155,12 @@ def train_rnn():
         #             f'True labels: {labels_test}, '
         #             f'Predicted labels: {y_pred_test}' + '\n')
         field_names = ['test_acc', 'labels_test', 'y_pred_test']
-        with open(DATA_PATH + f'outputs/{pt}_acc.csv', 'a+', newline='') as f:
+        if inputs['out_filename'] != '':
+            acc_filename = DATA_PATH + 'outputs/' + inputs['out_filename'] \
+                           + '.csv'
+        else:
+            acc_filename = DATA_PATH + f'outputs/{pt}{norm_ext}_acc.csv'
+        with open(acc_filename, 'a+', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=field_names)
             # writer.writerow([test_acc] + labels_test + y_pred_test)
             # writer.writeheader()
