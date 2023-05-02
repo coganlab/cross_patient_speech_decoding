@@ -104,7 +104,9 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
     # create callback for early stopping
     if early_stop:
         # early stopping with patience = 1/10 of total epochs
-        es = EarlyStopping(monitor='val_loss', patience=int(epochs / 10),
+        # es = EarlyStopping(monitor='val_loss', patience=int(epochs / 10),
+        #                    restore_best_weights=True)
+        es = EarlyStopping(monitor='val_accuracy', patience=int(epochs / 10),
                            restore_best_weights=True)
         cb = [es]
 
