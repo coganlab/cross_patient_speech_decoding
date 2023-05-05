@@ -13,7 +13,9 @@ from keras.layers import Reshape, Permute
 from .rnn_model_components import (linear_cnn_1D_module, linear_cnn_3D_module,
                                    lstm_enc_dec_module, gru_enc_dec_module,
                                    bi_lstm_enc_dec_module,
-                                   bi_gru_enc_dec_module)
+                                   bi_gru_enc_dec_module,
+                                   multi_layer_lstm_enc_dec_module,
+                                   multi_layer_bi_lstm_enc_dec_module)
 
 
 LSTM_TRAINING_NAME = 'training_lstm_final'
@@ -87,6 +89,42 @@ def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
         training_model, inf_enc_model, inf_dec_model = lstm_enc_dec_module(
                                     encoder_inputs, n_output, n_units,
                                     reg_lambda, dropout=dropout)
+
+    # add cnn layer to beginning of encoder-decoder LSTM
+    # training sequence input (training_model.input[1]) still separate input
+    # from CNN input
+    training_model = Model([cnn_inputs, training_model.input[1]],
+                           training_model([encoder_inputs,
+                                           training_model.input[1]]),
+                           name=LSTM_TRAINING_NAME)
+    inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs),
+                          name=LSTM_INF_ENC_NAME)
+
+    return training_model, inf_enc_model, inf_dec_model
+
+
+def stacked_lstm_1Dcnn_model(n_input_time, n_input_channel, n_output,
+                             n_filters, filter_size, n_units, n_layers,
+                             reg_lambda, dropout=0.0, bidir=False):
+    # create CNN feature extraction component
+    cnn_inputs, cnn_layers = linear_cnn_1D_module(n_input_time,
+                                                  n_input_channel, n_filters,
+                                                  filter_size, reg_lambda)
+    encoder_inputs = cnn_layers(cnn_inputs)
+
+    # create encoder-decoder component
+    if bidir:
+        training_model, inf_enc_model, inf_dec_model =\
+                                        multi_layer_bi_lstm_enc_dec_module(
+                                            encoder_inputs, n_output, n_units,
+                                            n_layers, reg_lambda,
+                                            dropout=dropout)
+    else:
+        training_model, inf_enc_model, inf_dec_model =\
+                                        multi_layer_lstm_enc_dec_module(
+                                            encoder_inputs, n_output, n_units,
+                                            n_layers, reg_lambda,
+                                            dropout=dropout)
 
     # add cnn layer to beginning of encoder-decoder LSTM
     # training sequence input (training_model.input[1]) still separate input
