@@ -15,7 +15,8 @@ sys.path.insert(0, '..')
 from processing_utils.feature_data_from_mat import get_high_gamma_data
 from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
                                                   decode_seq2seq)
-from seq2seq_models.rnn_models import lstm_1Dcnn_model
+from seq2seq_models.rnn_models import (lstm_1Dcnn_model,
+                                       stacked_lstm_1Dcnn_model)
 from train.train import train_seq2seq_kfold, train_seq2seq
 from visualization.plot_model_performance import (plot_accuracy_loss,
                                                   plot_tf_hist_loss_acc)
@@ -96,6 +97,7 @@ def train_rnn():
     filter_size = 10
     n_filters = 100  # S14=100, S26=90
     n_units = 256  # S14=800, S26=900
+    n_layers = 3
     reg_lambda = 1e-6  # S14=1e-6, S26=1e-5
     bidir = True
 
@@ -122,13 +124,24 @@ def train_rnn():
 
         if kfold:
 
-            kfold_model, kfold_enc, kfold_dec = lstm_1Dcnn_model(
+            # kfold_model, kfold_enc, kfold_dec = lstm_1Dcnn_model(
+            #                                         n_input_time,
+            #                                         n_input_channel,
+            #                                         n_output,
+            #                                         n_filters,
+            #                                         filter_size,
+            #                                         n_units,
+            #                                         reg_lambda,
+            #                                         bidir=bidir,
+            #                                         dropout=dropout)
+            kfold_model, kfold_enc, kfold_dec = stacked_lstm_1Dcnn_model(
                                                     n_input_time,
                                                     n_input_channel,
                                                     n_output,
                                                     n_filters,
                                                     filter_size,
                                                     n_units,
+                                                    n_layers,
                                                     reg_lambda,
                                                     bidir=bidir,
                                                     dropout=dropout)
@@ -151,18 +164,26 @@ def train_rnn():
             # final val acc - preds from inf decoder across all folds
             val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
 
-        train_model, inf_enc, inf_dec = lstm_1Dcnn_model(n_input_time,
-                                                         n_input_channel,
-                                                         n_output, n_filters,
-                                                         filter_size, n_units,
-                                                         reg_lambda,
-                                                         bidir=bidir,
-                                                         dropout=dropout)
+        # train_model, inf_enc, inf_dec = lstm_1Dcnn_model(
+        #                                     n_input_time,
+        #                                     n_input_channel,
+        #                                     n_output, n_filters,
+        #                                     filter_size, n_units,
+        #                                     reg_lambda,
+        #                                     bidir=bidir,
+        #                                     dropout=dropout)
+        train_model, inf_enc, inf_dec = stacked_lstm_1Dcnn_model(
+                                                n_input_time,
+                                                n_input_channel,
+                                                n_output, n_filters,
+                                                filter_size, n_units,
+                                                n_layers, reg_lambda,
+                                                bidir=bidir,
+                                                dropout=dropout)
 
         train_model.compile(optimizer=Adam(learning_rate),
                             loss='categorical_crossentropy',
                             metrics=['accuracy'])
-
 
         _, hist = train_seq2seq(train_model, X_train, X_prior_train,
                                 y_train, epochs=epochs,
