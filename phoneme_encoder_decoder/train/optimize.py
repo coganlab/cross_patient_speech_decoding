@@ -5,11 +5,14 @@ via KerasTuner
 Author: Zac Spalding. Adapted from code by Kumar Duraivel.
 """
 
+import sys
 import keras_tuner as kt
 from keras.optimizers import Adam
 from sklearn.metrics import balanced_accuracy_score
 
-from ..seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
+sys.path.insert(0, '..')
+
+from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                          stacked_gru_1Dcnn_model)
 from train.train import train_seq2seq_kfold
 
