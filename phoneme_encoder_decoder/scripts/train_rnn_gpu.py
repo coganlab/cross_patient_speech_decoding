@@ -140,8 +140,8 @@ def train_rnn():
                                                     n_output,
                                                     n_filters,
                                                     filter_size,
-                                                    n_units,
                                                     n_layers,
+                                                    n_units,
                                                     reg_lambda,
                                                     bidir=bidir,
                                                     dropout=dropout)
@@ -176,8 +176,8 @@ def train_rnn():
                                                 n_input_time,
                                                 n_input_channel,
                                                 n_output, n_filters,
-                                                filter_size, n_units,
-                                                n_layers, reg_lambda,
+                                                filter_size, n_layers,
+                                                n_units, reg_lambda,
                                                 bidir=bidir,
                                                 dropout=dropout)
 
