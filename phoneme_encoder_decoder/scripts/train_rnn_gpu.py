@@ -7,7 +7,6 @@ import sys
 import csv
 import argparse
 from keras.optimizers import Adam
-from keras.callbacks import EarlyStopping
 from sklearn.model_selection import ShuffleSplit
 from sklearn.metrics import balanced_accuracy_score
 
@@ -121,33 +120,36 @@ def train_rnn():
         print('Iteration: ', i+1)
         print('==============================================================')
 
-        kfold_model, kfold_enc, kfold_dec = lstm_1Dcnn_model(n_input_time,
-                                                             n_input_channel,
-                                                             n_output,
-                                                             n_filters,
-                                                             filter_size,
-                                                             n_units,
-                                                             reg_lambda,
-                                                             bidir=bidir,
-                                                             dropout=dropout)
+        if kfold:
 
-        kfold_model.compile(optimizer=Adam(learning_rate),
-                            loss='categorical_crossentropy',
-                            metrics=['accuracy'])
+            kfold_model, kfold_enc, kfold_dec = lstm_1Dcnn_model(
+                                                    n_input_time,
+                                                    n_input_channel,
+                                                    n_output,
+                                                    n_filters,
+                                                    filter_size,
+                                                    n_units,
+                                                    reg_lambda,
+                                                    bidir=bidir,
+                                                    dropout=dropout)
 
-        k_hist, y_pred_all, y_test_all = train_seq2seq_kfold(
-                                                kfold_model, kfold_enc,
-                                                kfold_dec, X_train,
-                                                X_prior_train, y_train,
-                                                num_folds=num_folds,
-                                                num_reps=num_reps,
-                                                batch_size=batch_size,
-                                                epochs=epochs,
-                                                early_stop=True,
-                                                verbose=verbose)
+            kfold_model.compile(optimizer=Adam(learning_rate),
+                                loss='categorical_crossentropy',
+                                metrics=['accuracy'])
 
-        # final val acc - preds from inf decoder across all folds
-        val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
+            k_hist, y_pred_all, y_test_all = train_seq2seq_kfold(
+                                                    kfold_model, kfold_enc,
+                                                    kfold_dec, X_train,
+                                                    X_prior_train, y_train,
+                                                    num_folds=num_folds,
+                                                    num_reps=num_reps,
+                                                    batch_size=batch_size,
+                                                    epochs=epochs,
+                                                    early_stop=False,
+                                                    verbose=verbose)
+
+            # final val acc - preds from inf decoder across all folds
+            val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
 
         train_model, inf_enc, inf_dec = lstm_1Dcnn_model(n_input_time,
                                                          n_input_channel,
@@ -161,10 +163,9 @@ def train_rnn():
                             loss='categorical_crossentropy',
                             metrics=['accuracy'])
 
-        es = EarlyStopping(monitor='val_accuracy', patience=int(epochs / 10),
-                           restore_best_weights=True)
+
         _, hist = train_seq2seq(train_model, X_train, X_prior_train,
-                                y_train, epochs=epochs, callbacks=[es],
+                                y_train, epochs=epochs,
                                 verbose=verbose)
 
         # test acc
@@ -209,9 +210,9 @@ def train_rnn():
                                  'labels_test': labels_test,
                                  'y_pred_test': y_pred_test})
 
-        plot_tf_hist_loss_acc(hist, save_fig=True,
-                              save_path=DATA_PATH +
-                              f'outputs/plots/{pt}_reg_train_{i+1}.png')
+        # plot_tf_hist_loss_acc(hist, save_fig=True,
+        #                       save_path=DATA_PATH +
+        #                       f'outputs/plots/{pt}_reg_train_{i+1}.png')
 
         if kfold:
             plot_accuracy_loss(k_hist, epochs=epochs, save_fig=True,
