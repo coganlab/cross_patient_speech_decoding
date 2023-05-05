@@ -104,7 +104,7 @@ def lstm_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
 
 
 def stacked_lstm_1Dcnn_model(n_input_time, n_input_channel, n_output,
-                             n_filters, filter_size, n_units, n_layers,
+                             n_filters, filter_size, n_layers, n_units,
                              reg_lambda, dropout=0.0, bidir=False):
     # create CNN feature extraction component
     cnn_inputs, cnn_layers = linear_cnn_1D_module(n_input_time,
@@ -116,14 +116,14 @@ def stacked_lstm_1Dcnn_model(n_input_time, n_input_channel, n_output,
     if bidir:
         training_model, inf_enc_model, inf_dec_model =\
                                         multi_layer_bi_lstm_enc_dec_module(
-                                            encoder_inputs, n_output, n_units,
-                                            n_layers, reg_lambda,
+                                            encoder_inputs, n_output, n_layers,
+                                            n_units, reg_lambda,
                                             dropout=dropout)
     else:
         training_model, inf_enc_model, inf_dec_model =\
                                         multi_layer_lstm_enc_dec_module(
-                                            encoder_inputs, n_output, n_units,
-                                            n_layers, reg_lambda,
+                                            encoder_inputs, n_output, n_layers,
+                                            n_units, reg_lambda,
                                             dropout=dropout)
 
     # add cnn layer to beginning of encoder-decoder LSTM
