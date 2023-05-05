@@ -17,7 +17,8 @@ from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
                                                   decode_seq2seq)
 from seq2seq_models.rnn_models import lstm_1Dcnn_model
 from train.train import train_seq2seq_kfold, train_seq2seq
-from visualization.plot_model_performance import plot_accuracy_loss
+from visualization.plot_model_performance import (plot_accuracy_loss,
+                                                  plot_tf_hist_loss_acc)
 
 
 def init_parser():
@@ -131,7 +132,7 @@ def train_rnn():
                             loss='categorical_crossentropy',
                             metrics=['accuracy'])
 
-        histories, y_pred_all, y_test_all = train_seq2seq_kfold(
+        k_hist, y_pred_all, y_test_all = train_seq2seq_kfold(
                                                 kfold_model, kfold_enc,
                                                 kfold_dec, X_train,
                                                 X_prior_train, y_train,
@@ -157,8 +158,9 @@ def train_rnn():
                             loss='categorical_crossentropy',
                             metrics=['accuracy'])
 
-        _, _ = train_seq2seq(train_model, X_train, X_prior_train,
-                                     y_train, epochs=epochs, verbose=verbose)
+        _, hist = train_seq2seq(train_model, X_train, X_prior_train,
+                                y_train, epochs=epochs, early_stop=True,
+                                verbose=verbose)
 
         # test acc
         y_pred_test, labels_test = decode_seq2seq(inf_enc, inf_dec, X_test,
@@ -201,11 +203,15 @@ def train_rnn():
                 writer.writerow({'test_acc': test_acc,
                                  'labels_test': labels_test,
                                  'y_pred_test': y_pred_test})
+                
+        plot_tf_hist_loss_acc(hist, save_fig=True, 
+                              save_path=DATA_PATH +
+                              f'outputs/plots/{pt}_reg_train_{i+1}.png')
 
         if kfold:
-            plot_accuracy_loss(histories, epochs=epochs, save_fig=True,
-                            save_path=DATA_PATH +
-                            f'outputs/plots/{pt}_train_all_{i+1}.png')
+            plot_accuracy_loss(k_hist, epochs=epochs, save_fig=True,
+                               save_path=DATA_PATH +
+                               f'outputs/plots/{pt}_kfold_train_{i+1}.png')
 
 
 if __name__ == '__main__':
