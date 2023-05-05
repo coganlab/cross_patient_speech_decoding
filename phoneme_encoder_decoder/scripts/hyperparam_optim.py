@@ -105,15 +105,15 @@ def hyperparam_optim():
     tuning_epochs = 800
     hyper_model = encDecHyperModel(n_input_time, n_input_channel, n_output,
                                    dropout=dropout, bidir=bidir)
+    obj_name = 'seq2seq_val_accuracy'
 
     if oracle_type == 'random':
         oracle = kt.oracles.RandomSearchOracle(
-                    objective=kt.Objective('val_accuracy', direction='max'),
+                    objective=kt.Objective(obj_name, direction='max'),
                     max_trials=max_optim_trials)
     elif oracle_type == 'bayesian':
         oracle = kt.oracles.BayesianOptimizationOracle(
-                    objective=kt.Objective('seq2seq_val_accuracy',
-                                           direction='max'),
+                    objective=kt.Objective(obj_name, direction='max'),
                     max_trials=max_optim_trials)
 
     rnn_optimizer = encDecTuner(hypermodel=hyper_model, oracle=oracle,
