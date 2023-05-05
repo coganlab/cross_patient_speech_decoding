@@ -15,7 +15,9 @@ from .rnn_model_components import (linear_cnn_1D_module, linear_cnn_3D_module,
                                    bi_lstm_enc_dec_module,
                                    bi_gru_enc_dec_module,
                                    multi_layer_lstm_enc_dec_module,
-                                   multi_layer_bi_lstm_enc_dec_module)
+                                   multi_layer_bi_lstm_enc_dec_module,
+                                   multi_layer_gru_enc_dec_module,
+                                   multi_layer_bi_gru_enc_dec_module)
 
 
 LSTM_TRAINING_NAME = 'training_lstm_final'
@@ -228,6 +230,59 @@ def gru_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
         training_model, inf_enc_model, inf_dec_model = gru_enc_dec_module(
                                     encoder_inputs, n_output, n_units,
                                     reg_lambda, dropout=dropout)
+
+    # add cnn layer to beginning of encoder-decoder LSTM
+    # training sequence input (training_model.input[1]) still separate input
+    # from CNN input
+    training_model = Model([cnn_inputs, training_model.input[1]],
+                           training_model([encoder_inputs,
+                                           training_model.input[1]]),
+                           name=GRU_TRAINING_NAME)
+    inf_enc_model = Model(cnn_inputs, inf_enc_model(encoder_inputs),
+                          name=GRU_INF_ENC_NAME)
+
+    return training_model, inf_enc_model, inf_dec_model
+
+
+def stacked_gru_1Dcnn_model(n_input_time, n_input_channel, n_output, n_filters,
+                            filter_size, n_layers, n_units, reg_lambda,
+                            dropout=0.0, bidir=False):
+    """Creates a joint 1D CNN-GRU  model by adding a 1D convolutional layer to
+    the front of an encoder-decoder GRU model.
+
+    Args:
+        n_input_time (int): Number of timesteps.
+        n_input_channel (int): Number of channels.
+        n_output (int): Cardinality of output space.
+        n_filters (int): Number of convolutional filters.
+        filter_size (int): Size (and stride) of convolutional filters.
+        n_units (int): Number of units in LSTM layers.
+        reg_lambda (float): L2 regularization parameter.
+        bidir (bool, optional): If true, use bidirectional encoder-decoder
+            model. Else, use regular encoder-decoder model. Defaults to False.
+
+    Returns:
+        (Functional, Functional, Functional): Encoder-decoder training model,
+            encoder inference model, decoder inference model
+    """
+    # create CNN feature extraction component
+    cnn_inputs, cnn_layers = linear_cnn_1D_module(n_input_time,
+                                                  n_input_channel, n_filters,
+                                                  filter_size, reg_lambda)
+    encoder_inputs = cnn_layers(cnn_inputs)
+
+    # create encoder-decoder component
+    if bidir:
+        training_model, inf_enc_model, inf_dec_model =\
+                                    multi_layer_bi_gru_enc_dec_module(
+                                        encoder_inputs, n_output, n_layers,
+                                        n_units, reg_lambda,
+                                        dropout=dropout)
+    else:
+        training_model, inf_enc_model, inf_dec_model =\
+                                    multi_layer_gru_enc_dec_module(
+                                        encoder_inputs, n_output, n_layers,
+                                        n_units, reg_lambda, dropout=dropout)
 
     # add cnn layer to beginning of encoder-decoder LSTM
     # training sequence input (training_model.input[1]) still separate input

@@ -417,3 +417,118 @@ def multi_layer_bi_lstm_enc_dec_module(encoder_inputs, n_output, n_layers,
                           name=LSTM_INF_DEC_NAME)
 
     return training_model, inf_enc_model, inf_dec_model
+
+
+def multi_layer_gru_enc_dec_module(encoder_inputs, n_output, n_layers,
+                                   n_units, reg_lambda, dropout=0.2):
+    # define stacked encoder layers (all but last as state definition is needed
+    # for last layer)
+    stacked_outputs = encoder_inputs
+    for _ in range(n_layers - 1):
+        encoder = GRU(n_units, return_sequences=True,
+                      recurrent_regularizer=L2(reg_lambda),
+                      kernel_regularizer=L2(reg_lambda),
+                      bias_regularizer=L2(reg_lambda),
+                      dropout=dropout)
+        stacked_outputs = encoder(stacked_outputs)
+
+    # final training encoder layer that transfer states to decoder
+    encoder = GRU(n_units, return_state=True,
+                  kernel_regularizer=L2(reg_lambda),
+                  recurrent_regularizer=L2(reg_lambda),
+                  bias_regularizer=L2(reg_lambda),
+                  dropout=dropout)
+    encoder_outputs, state_h = encoder(stacked_outputs)
+    encoder_states = [state_h]
+
+    # define training decoder
+    decoder_inputs = Input(shape=(None, n_output))
+    decoder_lstm = GRU(n_units, return_sequences=True, return_state=True,
+                       kernel_regularizer=L2(reg_lambda),
+                       recurrent_regularizer=L2(reg_lambda),
+                       bias_regularizer=L2(reg_lambda), dropout=dropout)
+    decoder_outputs, _, _ = decoder_lstm(decoder_inputs,
+                                         initial_state=encoder_states)
+    decoder_dense = Dense(n_output, activation='softmax')
+    decoder_outputs = decoder_dense(decoder_outputs)
+
+    # combine encoder and decoder into training model
+    training_model = Model([encoder_inputs, decoder_inputs], decoder_outputs,
+                           name=GRU_TRAINING_NAME)
+
+    # define inference encoder
+    inf_enc_model = Model(encoder_inputs, encoder_states,
+                          name=GRU_INF_ENC_NAME)
+
+    # define inference decoder
+    decoder_state_input_h = Input(shape=(n_units,))
+    decoder_state_input_c = Input(shape=(n_units,))
+    decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
+    decoder_outputs, state_h, state_c = decoder_lstm(
+                                        decoder_inputs,
+                                        initial_state=decoder_states_inputs)
+    decoder_states = [state_h, state_c]
+    decoder_outputs = decoder_dense(decoder_outputs)
+    inf_dec_model = Model([decoder_inputs] + decoder_states_inputs,
+                          [decoder_outputs] + decoder_states,
+                          name=GRU_INF_DEC_NAME)
+
+    return training_model, inf_enc_model, inf_dec_model
+
+
+def multi_layer_bi_gru_enc_dec_module(encoder_inputs, n_output, n_layers,
+                                      n_units, reg_lambda, dropout=0.2):
+    # define stacked encoder layers (all but last as state definition is needed
+    # for last layer)
+    stacked_outputs = encoder_inputs
+    for _ in range(n_layers - 1):
+        encoder = Bidirectional(GRU(n_units, return_sequences=True,
+                                    kernel_regularizer=L2(reg_lambda),
+                                    recurrent_regularizer=L2(reg_lambda),
+                                    bias_regularizer=L2(reg_lambda),
+                                    dropout=dropout))
+        stacked_outputs = encoder(stacked_outputs)
+
+    # final training encoder layer that transfer states to decoder
+    encoder = Bidirectional(GRU(n_units, return_state=True,
+                                kernel_regularizer=L2(reg_lambda),
+                                recurrent_regularizer=L2(reg_lambda),
+                                bias_regularizer=L2(reg_lambda),
+                                dropout=dropout))
+    _, forward_state_h, backward_state_h = encoder(stacked_outputs)
+    state_h = Average()([forward_state_h, backward_state_h])
+    encoder_states = [state_h]
+
+    # define training decoder
+    decoder_inputs = Input(shape=(None, n_output))
+    decoder_lstm = GRU(n_units, return_sequences=True, return_state=True,
+                       kernel_regularizer=L2(reg_lambda),
+                       recurrent_regularizer=L2(reg_lambda),
+                       bias_regularizer=L2(reg_lambda), dropout=dropout)
+    decoder_outputs, _, _ = decoder_lstm(decoder_inputs,
+                                         initial_state=encoder_states)
+    decoder_dense = Dense(n_output, activation='softmax')
+    decoder_outputs = decoder_dense(decoder_outputs)
+
+    # combine encoder and decoder into training model
+    training_model = Model([encoder_inputs, decoder_inputs], decoder_outputs,
+                           name=GRU_TRAINING_NAME)
+
+    # define inference encoder
+    inf_enc_model = Model(encoder_inputs, encoder_states,
+                          name=GRU_INF_ENC_NAME)
+
+    # define inference decoder
+    decoder_state_input_h = Input(shape=(n_units,))
+    decoder_state_input_c = Input(shape=(n_units,))
+    decoder_states_inputs = [decoder_state_input_h, decoder_state_input_c]
+    decoder_outputs, state_h, state_c = decoder_lstm(
+                                        decoder_inputs,
+                                        initial_state=decoder_states_inputs)
+    decoder_states = [state_h, state_c]
+    decoder_outputs = decoder_dense(decoder_outputs)
+    inf_dec_model = Model([decoder_inputs] + decoder_states_inputs,
+                          [decoder_outputs] + decoder_states,
+                          name=GRU_INF_DEC_NAME)
+
+    return training_model, inf_enc_model, inf_dec_model
