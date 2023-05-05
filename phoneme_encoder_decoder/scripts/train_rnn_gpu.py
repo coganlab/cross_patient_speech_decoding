@@ -17,7 +17,8 @@ from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
                                                   decode_seq2seq)
 from seq2seq_models.rnn_models import lstm_1Dcnn_model
 from train.train import train_seq2seq_kfold, train_seq2seq
-from visualization.plot_model_performance import plot_accuracy_loss
+from visualization.plot_model_performance import (plot_accuracy_loss,
+                                                  plot_tf_hist_loss_acc)
 
 
 def init_parser():
@@ -32,6 +33,9 @@ def init_parser():
                         'or mean-subtracted normalization (False)')
     parser.add_argument('-n', '--num_iter', type=int, default=5,
                         required=False, help='Number of times to run model')
+    parser.add_argument('-k', '--k_fold', type=str, default='True',
+                        required=False, help='Perform k-fold CV (True)'
+                        'or not (False)')
     parser.add_argument('-v', '--verbose', type=int, default=1,
                         required=False, help='Verbosity of model training')
     parser.add_argument('-c', '--cluster', type=str, default='True',
@@ -59,6 +63,7 @@ def train_rnn():
     chan_ext = '_sigChannel' if str2bool(inputs['sig_channels']) else '_all'
     norm_ext = '_zscore' if str2bool(inputs['z_score']) else ''
     n_iter = inputs['num_iter']
+    kfold = str2bool(inputs['k_fold'])
     verbose = inputs['verbose']
     cluster = str2bool(inputs['cluster'])
 
@@ -101,6 +106,7 @@ def train_rnn():
     batch_size = 200
     epochs = 800
     learning_rate = 1e-3
+    dropout = 0.33
 
     # Hold out test data set
     data_split = ShuffleSplit(n_splits=1, test_size=test_size, random_state=2)
@@ -114,32 +120,53 @@ def train_rnn():
         print('Iteration: ', i+1)
         print('==============================================================')
 
+        if kfold:
+
+            kfold_model, kfold_enc, kfold_dec = lstm_1Dcnn_model(
+                                                    n_input_time,
+                                                    n_input_channel,
+                                                    n_output,
+                                                    n_filters,
+                                                    filter_size,
+                                                    n_units,
+                                                    reg_lambda,
+                                                    bidir=bidir,
+                                                    dropout=dropout)
+
+            kfold_model.compile(optimizer=Adam(learning_rate),
+                                loss='categorical_crossentropy',
+                                metrics=['accuracy'])
+
+            k_hist, y_pred_all, y_test_all = train_seq2seq_kfold(
+                                                    kfold_model, kfold_enc,
+                                                    kfold_dec, X_train,
+                                                    X_prior_train, y_train,
+                                                    num_folds=num_folds,
+                                                    num_reps=num_reps,
+                                                    batch_size=batch_size,
+                                                    epochs=epochs,
+                                                    early_stop=False,
+                                                    verbose=verbose)
+
+            # final val acc - preds from inf decoder across all folds
+            val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
+
         train_model, inf_enc, inf_dec = lstm_1Dcnn_model(n_input_time,
                                                          n_input_channel,
                                                          n_output, n_filters,
                                                          filter_size, n_units,
                                                          reg_lambda,
                                                          bidir=bidir,
-                                                         dropout=0.33)
+                                                         dropout=dropout)
 
         train_model.compile(optimizer=Adam(learning_rate),
                             loss='categorical_crossentropy',
                             metrics=['accuracy'])
 
-        # histories, y_pred_all, y_test_all = train_seq2seq_kfold(
-        #                                         train_model, inf_enc, inf_dec,
-        #                                         X_train, X_prior_train,
-        #                                         y_train, num_folds=num_folds,
-        #                                         num_reps=num_reps,
-        #                                         batch_size=batch_size,
-        #                                         epochs=epochs,
-        #                                         early_stop=False,
-        #                                         verbose=verbose)
-        _, histories = train_seq2seq(train_model, X_train, X_prior_train,
-                                     y_train, epochs=epochs, verbose=verbose)
 
-        # final val acc - preds from inf decoder across all folds
-        # val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
+        _, hist = train_seq2seq(train_model, X_train, X_prior_train,
+                                y_train, epochs=epochs,
+                                verbose=verbose)
 
         # test acc
         y_pred_test, labels_test = decode_seq2seq(inf_enc, inf_dec, X_test,
@@ -154,22 +181,43 @@ def train_rnn():
         #     f.write(f'Final test accuracy: {test_acc}, '
         #             f'True labels: {labels_test}, '
         #             f'Predicted labels: {y_pred_test}' + '\n')
-        field_names = ['test_acc', 'labels_test', 'y_pred_test']
+        if kfold:
+            field_names = ['val_acc', 'test_acc', 'labels_test',
+                           'y_pred_test']
+        else:
+            field_names = ['test_acc', 'labels_test', 'y_pred_test']
+
         if inputs['out_filename'] != '':
             acc_filename = DATA_PATH + 'outputs/' + inputs['out_filename'] \
                            + '.csv'
         else:
-            acc_filename = DATA_PATH + f'outputs/{pt}{norm_ext}_acc.csv'
+            if kfold:
+                acc_filename = DATA_PATH + (f'outputs/{pt}{norm_ext}_acc_kfold'
+                                            '.csv')
+            else:
+                acc_filename = DATA_PATH + f'outputs/{pt}{norm_ext}_acc.csv'
+
         with open(acc_filename, 'a+', newline='') as f:
             writer = csv.DictWriter(f, fieldnames=field_names)
             # writer.writerow([test_acc] + labels_test + y_pred_test)
             # writer.writeheader()
-            writer.writerow({'test_acc': test_acc, 'labels_test': labels_test,
-                             'y_pred_test': y_pred_test})
+            if kfold:
+                writer.writerow({'val_acc': val_acc, 'test_acc': test_acc,
+                                 'labels_test': labels_test,
+                                 'y_pred_test': y_pred_test})
+            else:
+                writer.writerow({'test_acc': test_acc,
+                                 'labels_test': labels_test,
+                                 'y_pred_test': y_pred_test})
 
-        # plot_accuracy_loss(histories, epochs=epochs, save_fig=True,
-        #                    save_path=DATA_PATH +
-        #                    f'outputs/plots/{pt}_train_all_{i+1}.png')
+        # plot_tf_hist_loss_acc(hist, save_fig=True,
+        #                       save_path=DATA_PATH +
+        #                       f'outputs/plots/{pt}_reg_train_{i+1}.png')
+
+        if kfold:
+            plot_accuracy_loss(k_hist, epochs=epochs, save_fig=True,
+                               save_path=DATA_PATH +
+                               f'outputs/plots/{pt}_kfold_train_{i+1}.png')
 
 
 if __name__ == '__main__':

@@ -73,6 +73,34 @@ def create_CV_history_df(cv_histories, epochs=100):
     return df
 
 
+def plot_tf_hist_loss_acc(history, save_fig=False,
+                          save_path="../../figures/loss_accuracy.png"):
+    _, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+
+    ax1.plot(history.history['loss'], color='blue', label='Train')
+    ax1.plot(history.history['val_loss'], color='orange', label='Validation')
+    ax1.plot(history.history['seq2seq_val_loss'], color='red',
+             label='Seq2seq Validation')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.set_title('RNN Loss')
+    ax1.legend()
+
+    ax2.plot(history.history['accuracy'], color='blue', label='Train')
+    ax2.plot(history.history['val_accuracy'], color='orange', label='Validation')
+    ax2.plot(history.history['seq2seq_val_accuracy'], color='red',
+             label='Seq2seq Validation')
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Accuracy')
+    ax2.set_title('RNN Accuracy')
+    ax2.legend()
+
+    if save_fig:
+        plt.savefig(save_path)
+
+    plt.show()
+
+
 def plot_accuracy_loss(cv_histories, epochs=100, save_fig=False,
                        save_path="../../figures/loss_accuracy.png"):
     train_loss_df = create_CV_history_df(cv_histories, epochs=epochs)
