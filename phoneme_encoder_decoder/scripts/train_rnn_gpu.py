@@ -7,6 +7,7 @@ import sys
 import csv
 import argparse
 from keras.optimizers import Adam
+from keras.callbacks import EarlyStopping
 from sklearn.model_selection import ShuffleSplit
 from sklearn.metrics import balanced_accuracy_score
 
@@ -121,12 +122,14 @@ def train_rnn():
         print('==============================================================')
 
         kfold_model, kfold_enc, kfold_dec = lstm_1Dcnn_model(n_input_time,
-                                                         n_input_channel,
-                                                         n_output, n_filters,
-                                                         filter_size, n_units,
-                                                         reg_lambda,
-                                                         bidir=bidir,
-                                                         dropout=dropout)
+                                                             n_input_channel,
+                                                             n_output,
+                                                             n_filters,
+                                                             filter_size,
+                                                             n_units,
+                                                             reg_lambda,
+                                                             bidir=bidir,
+                                                             dropout=dropout)
 
         kfold_model.compile(optimizer=Adam(learning_rate),
                             loss='categorical_crossentropy',
@@ -158,8 +161,10 @@ def train_rnn():
                             loss='categorical_crossentropy',
                             metrics=['accuracy'])
 
+        es = EarlyStopping(monitor='val_accuracy', patience=int(epochs / 10),
+                           restore_best_weights=True)
         _, hist = train_seq2seq(train_model, X_train, X_prior_train,
-                                y_train, epochs=epochs, early_stop=True,
+                                y_train, epochs=epochs, callbacks=[es],
                                 verbose=verbose)
 
         # test acc
@@ -180,7 +185,7 @@ def train_rnn():
                            'y_pred_test']
         else:
             field_names = ['test_acc', 'labels_test', 'y_pred_test']
-            
+
         if inputs['out_filename'] != '':
             acc_filename = DATA_PATH + 'outputs/' + inputs['out_filename'] \
                            + '.csv'
@@ -203,8 +208,8 @@ def train_rnn():
                 writer.writerow({'test_acc': test_acc,
                                  'labels_test': labels_test,
                                  'y_pred_test': y_pred_test})
-                
-        plot_tf_hist_loss_acc(hist, save_fig=True, 
+
+        plot_tf_hist_loss_acc(hist, save_fig=True,
                               save_path=DATA_PATH +
                               f'outputs/plots/{pt}_reg_train_{i+1}.png')
 
