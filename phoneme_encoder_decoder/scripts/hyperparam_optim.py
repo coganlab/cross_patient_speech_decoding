@@ -95,12 +95,16 @@ def hyperparam_optim():
     X_prior_train, X_prior_test = X_prior[train_idx], X_prior[test_idx]
     y_train, y_test = y[train_idx], y[test_idx]
 
+    dropout = 0.33
+    bidir = True
+
     # keras tuner optimization
     max_optim_trials = 200
     tuning_dir = 'rnn_tuning'
     project_dir = 'S14_1Dcnn_EncDec'
     tuning_epochs = 800
-    hyper_model = encDecHyperModel(n_input_time, n_input_channel, n_output)
+    hyper_model = encDecHyperModel(n_input_time, n_input_channel, n_output,
+                                   dropout=dropout, bidir=bidir)
 
     if oracle_type == 'random':
         oracle = kt.oracles.RandomSearchOracle(
