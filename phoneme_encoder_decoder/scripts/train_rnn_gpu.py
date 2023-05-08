@@ -97,7 +97,7 @@ def train_rnn():
     filter_size = 10
     n_filters = 100  # S14=100, S26=90
     n_units = 256  # S14=800, S26=900
-    n_layers = 3
+    n_layers = 1
     reg_lambda = 1e-6  # S14=1e-6, S26=1e-5
     bidir = True
 
