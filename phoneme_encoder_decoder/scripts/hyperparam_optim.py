@@ -70,7 +70,9 @@ def hyperparam_optim():
     print('==================================================================')
     print("Optimizing hyperparameters for patient %s." % pt)
     print("Getting data from %s." % (DATA_PATH + f'{pt}/'))
-    print("Saving outputs to %s." % (DATA_PATH + 'rnn_tuning/'))
+    print("Saving outputs to %s." % (DATA_PATH + ('rnn_tuning/'
+                                                   f'{pt}_1Dcnn_EncDec_'
+                                                   f'{oracle_type}/')))
     print('==================================================================')
 
     # Load in data from workspace mat files
@@ -101,7 +103,7 @@ def hyperparam_optim():
     # keras tuner optimization
     max_optim_trials = 200
     tuning_dir = 'rnn_tuning'
-    project_dir = 'S14_1Dcnn_EncDec'
+    project_dir = f'{pt}_1Dcnn_EncDec_{oracle_type}'
     tuning_epochs = 800
     hyper_model = encDecHyperModel(n_input_time, n_input_channel, n_output,
                                    dropout=dropout, bidir=bidir)
