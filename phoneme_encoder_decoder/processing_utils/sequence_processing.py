@@ -181,10 +181,12 @@ def DEPseq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
     return np.array(output)
 
 
-def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
-                          verbose=0):
+def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output):
     batch_states = inf_enc.predict_on_batch(source)
-    batch_states = [tf.convert_to_tensor(s) for s in batch_states]
+    if isinstance(batch_states, list):  # lstm tensor conversion
+        batch_states = [tf.convert_to_tensor(s) for s in batch_states]
+    else:  # gru tensor conversion
+        batch_states = [tf.convert_to_tensor(batch_states)]
 
     batch_target = tf.Variable(tf.zeros((source.shape[0], 1, n_output)))
     batch_target = batch_target[:, 0, 0].assign(1)
