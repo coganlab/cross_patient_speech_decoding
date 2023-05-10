@@ -85,7 +85,7 @@ def train_rnn():
                                                         f'{pt}/{pt}_HG'
                                                         f'{chan_ext}'
                                                         f'{norm_ext}'
-                                                        '.mat')
+                                                        '_goodTrials.mat')
 
     n_output = 10
     X = hg_trace  # use HG traces (n_trials, n_channels, n_timepoints) for CNN
