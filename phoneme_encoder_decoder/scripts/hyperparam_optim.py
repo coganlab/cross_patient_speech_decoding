@@ -80,7 +80,7 @@ def hyperparam_optim():
                                                         f'{pt}/{pt}_HG'
                                                         f'{chan_ext}'
                                                         f'{norm_ext}'
-                                                        '.mat')
+                                                        '_goodTrials.mat')
 
     n_output = 10
     X = hg_trace  # use HG traces (n_trials, n_channels, n_timepoints)
@@ -128,7 +128,7 @@ def hyperparam_optim():
         '/optim_summary.txt'
     with open(summary_path, 'w+') as f:
         with redirect_stdout(f):
-            rnn_optimizer.results_summary()
+            rnn_optimizer.results_summary(num_trials=50)
 
 
 if __name__ == '__main__':

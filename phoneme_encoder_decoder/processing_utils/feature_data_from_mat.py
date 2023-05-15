@@ -30,7 +30,7 @@ def process_mat_filename(subject_id, sig_channel, zscore):
         norm_suffix = ''
 
     filename = str(data_dir + subject_dir + filename_base + chan_suffix +
-                   norm_suffix + '.mat')
+                   norm_suffix + '_goodTrials.mat')
     return filename
 
 

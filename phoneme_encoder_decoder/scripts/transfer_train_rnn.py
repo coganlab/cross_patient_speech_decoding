@@ -15,7 +15,8 @@ sys.path.insert(0, '..')
 from processing_utils.feature_data_from_mat import get_high_gamma_data
 from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
                                                   decode_seq2seq)
-from seq2seq_models.rnn_models import stacked_lstm_1Dcnn_model
+from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
+                                       stacked_gru_1Dcnn_model)
 from train.transfer_training import (transfer_seq2seq_kfold_diff_chans,
                                      transfer_train_seq2seq_diff_chans)
 from visualization.plot_model_performance import plot_accuracy_loss
@@ -92,7 +93,7 @@ def transfer_train_rnn():
                                                     f'{pretrain_pt}_HG'
                                                     f'{chan_ext}'
                                                     f'{norm_ext}'
-                                                    '.mat')
+                                                    '_goodTrials.mat')
 
     tar_hg_trace, tar_hg_map, tar_phon_labels = get_high_gamma_data(
                                                     DATA_PATH +
@@ -100,7 +101,7 @@ def transfer_train_rnn():
                                                     f'{transfer_pt}_HG'
                                                     f'{chan_ext}'
                                                     f'{norm_ext}'
-                                                    '.mat')
+                                                    '_goodTrials.mat')
 
     n_output = 10
     X1 = pre_hg_trace  # (n_trials, n_channels, n_timepoints) for 1D CNN
@@ -115,9 +116,12 @@ def transfer_train_rnn():
     n_input_time = X1.shape[1]
     n_input_channel_pre = X1.shape[2]
     n_input_channel_trans = X2.shape[2]
+    model_type = 'lstm'
+    model_fcn = stacked_gru_1Dcnn_model if model_type == 'gru' else \
+        stacked_lstm_1Dcnn_model
     filter_size = 10
     n_filters = 100  # S14=100, S26=90
-    n_layers = 1
+    n_layers = 1  # 1
     n_units = 256  # S14=800, S26=900
     reg_lambda = 1e-6  # S14=1e-6, S26=1e-5
     dropout = 0.33
@@ -149,7 +153,7 @@ def transfer_train_rnn():
 
         if kfold:
 
-            k_pre_model, k_pre_enc, k_pre_dec = stacked_lstm_1Dcnn_model(
+            k_pre_model, k_pre_enc, k_pre_dec = model_fcn(
                                                     n_input_time,
                                                     n_input_channel_pre,
                                                     n_output, n_filters,
@@ -157,7 +161,7 @@ def transfer_train_rnn():
                                                     n_units, reg_lambda,
                                                     bidir=bidir,
                                                     dropout=dropout)
-            k_tar_model, k_tar_enc, k_tar_dec = stacked_lstm_1Dcnn_model(
+            k_tar_model, k_tar_enc, k_tar_dec = model_fcn(
                                                     n_input_time,
                                                     n_input_channel_trans,
                                                     n_output, n_filters,
@@ -191,14 +195,14 @@ def transfer_train_rnn():
             val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
 
         # new models for training on all of training data (no validation split)
-        pre_model, pre_enc, pre_dec = stacked_lstm_1Dcnn_model(
-                                                n_input_time,
-                                                n_input_channel_pre,
-                                                n_output, n_filters,
-                                                filter_size, n_layers, n_units,
-                                                reg_lambda, bidir=bidir,
-                                                dropout=dropout)
-        tar_model, tar_enc, tar_dec = stacked_lstm_1Dcnn_model(
+        pre_model, pre_enc, pre_dec = model_fcn(
+                                            n_input_time,
+                                            n_input_channel_pre,
+                                            n_output, n_filters,
+                                            filter_size, n_layers, n_units,
+                                            reg_lambda, bidir=bidir,
+                                            dropout=dropout)
+        tar_model, tar_enc, tar_dec = model_fcn(
                                             n_input_time,
                                             n_input_channel_trans,
                                             n_output, n_filters,

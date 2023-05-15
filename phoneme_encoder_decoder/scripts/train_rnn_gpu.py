@@ -85,7 +85,8 @@ def train_rnn():
                                                         f'{pt}/{pt}_HG'
                                                         f'{chan_ext}'
                                                         f'{norm_ext}'
-                                                        '.mat')
+                                                        '_goodTrials.mat')
+                                                        # '.mat')
 
     n_output = 10
     X = hg_trace  # use HG traces (n_trials, n_channels, n_timepoints) for CNN
@@ -99,6 +100,7 @@ def train_rnn():
     n_units = 256  # S14=800, S26=900
     n_layers = 1
     reg_lambda = 1e-6  # S14=1e-6, S26=1e-5
+    dropout = 0.33  # 0.33
     bidir = True
 
     # Train model
@@ -108,7 +110,6 @@ def train_rnn():
     batch_size = 200
     epochs = 800
     learning_rate = 1e-3
-    dropout = 0.33
 
     # Hold out test data set
     data_split = ShuffleSplit(n_splits=1, test_size=test_size, random_state=2)
