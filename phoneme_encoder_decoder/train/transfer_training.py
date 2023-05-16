@@ -294,7 +294,79 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
     return fine_tune_model, total_hist
 
 
-def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
+# def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
+#                          X2_prior, y2, num_folds=10, num_reps=3, **kwargs):
+#     # save initial weights to reset model for each fold
+#     init_train_w = model.get_weights()
+
+#     n_output = y2.shape[-1]  # number of output classes
+#     seq_len = y2.shape[-2]  # length of output sequence
+
+#     # define k-fold cross validation
+#     cv = KFold(n_splits=num_folds, shuffle=True)
+#     pre_splits = cv_split_multi_pt(cv, X1)
+#     tar_splits = cv.split(X2)
+
+#     # dictionary for tracking history of each fold
+#     histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
+#                  'val_loss': []}
+
+#     # cv training
+#     y_pred_all, y_test_all = [], []
+#     for f in range(num_folds):
+#         train_ind1, test_ind1 = next(pre_splits)
+#         train_ind2, test_ind2 = next(tar_splits)
+#         fold = f + 1
+#         print(f'===== Fold {fold} =====')
+#         for _ in range(num_reps):  # repeat fold for stability
+
+#             # reset model weights for current fold (also resets associated
+#             # inference weights)
+#             shuffle_weights(model, weights=init_train_w)
+
+#             transfer_hist, y_pred_fold, y_test_fold = \
+#                 transfer_chain_single_fold(model, inf_enc,
+#                                            inf_dec, X1, X1_prior, y1,
+#                                            X2, X2_prior, y2, train_ind1,
+#                                            test_ind1, train_ind2, test_ind2,
+#                                            **kwargs)
+
+#             # track history in-place
+#             track_model_history(histories, transfer_hist)
+
+#             y_pred_all.extend(y_pred_fold)
+#             y_test_all.extend(y_test_fold)
+
+#     return histories, np.array(y_pred_all), np.array(y_test_all)
+
+
+# def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
+#                                X1_prior, y1, X2, X2_prior, y2,
+#                                train_ind1, test_ind1, train_ind2, test_ind2,
+#                                **kwargs):
+#     data_split_multi_pt(X1, X1_prior, y1, train_ind1, test_ind1)
+#     X1_train, X1_test = X1[train_ind1], X1[test_ind1]
+#     X1_prior_train, X1_prior_test = X1_prior[train_ind1], X1_prior[test_ind1]
+#     y1_train, y1_test = y1[train_ind1], y1[test_ind1]
+
+#     data_split_multi_pt(X2, X2_prior, y2, train_ind2, test_ind)
+#     X2_train, X2_test = X2[train_ind2], X2[test_ind2]
+#     X2_prior_train, X2_prior_test = X2_prior[train_ind2], X2_prior[test_ind2]
+#     y2_train, y2_test = y2[train_ind2], y2[test_ind2]
+
+#     model, inf_enc, transfer_hist = transfer_train_chain(
+#                                             model, inf_enc, X1_train,
+#                                             X1_prior_train, y1_train, X2_train,
+#                                             X2_prior_train, y2_train,
+#                                             **kwargs)
+
+#     y_test_fold, y_pred_fold = decode_seq2seq(inf_enc, inf_dec, X2_test,
+#                                               y2_test)
+
+#     return transfer_hist, y_test_fold, y_pred_fold
+
+
+def transfer_train_chain(model, inf_enc, X1, X1_prior, y1, X2, X2_prior, y2,
                          pretrain_epochs=200, conv_epochs=60,
                          target_epochs=540, conv_idx=1, enc_dec_idx=-1,
                          **kwargs):
@@ -331,7 +403,10 @@ def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
             training on target patient. Defaults to 540.
 
     Returns:
-        Callback: Training performance history across all transfer stages.
+        (Functional, Functional, Callback): Transfer model with convolutional
+            layer updated for target patient shape, inference encoder with
+            convolutional layer updated for target patient shape, training
+            performance history across all transfer stages.
     """
     # parse pre-train input to check for multiple pts
     if not isinstance(X1, list):  # data input as single pt
@@ -347,12 +422,13 @@ def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
     for i in range(1, len(X1)):
         # update conv layer for current pretrain pt to better extract features
         n_channels = X1[i].shape[-1]
-        model, conv_hist = transfer_conv_update(model, X1[i], X1_prior[i],
-                                                y1[i], n_channels,
-                                                epochs=conv_epochs,
-                                                conv_idx=conv_idx,
-                                                enc_dec_idx=enc_dec_idx,
-                                                **kwargs)
+        model, inf_enc, conv_hist = transfer_conv_update(
+                                            model, inf_enc, X1[i], X1_prior[i],
+                                            y1[i], n_channels,
+                                            epochs=conv_epochs,
+                                            conv_idx=conv_idx,
+                                            enc_dec_idx=enc_dec_idx,
+                                            **kwargs)
         # pretraining on current pretrain pt
         _, pretrain_hist = train_seq2seq(model, X1[i], X1_prior[i], y1[i],
                                          epochs=pretrain_epochs, **kwargs)
@@ -360,7 +436,8 @@ def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
 
     # update conv layer for target pt
     tar_channels = X2.shape[-1]
-    model, conv_hist = transfer_conv_update(model, X2, X2_prior, y2,
+    model, inf_enc, conv_hist = transfer_conv_update(
+                                            model, inf_enc, X2, X2_prior, y2,
                                             tar_channels, epochs=conv_epochs,
                                             conv_idx=conv_idx,
                                             enc_dec_idx=enc_dec_idx,
@@ -372,22 +449,23 @@ def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
 
     total_hist = concat_hists([curr_hist, conv_hist, target_hist])
 
-    return model, total_hist
+    return model, inf_enc, total_hist
 
 
-def transfer_conv_update(model, X, X_prior, y, n_channels, conv_idx=1,
+def transfer_conv_update(model, inf_enc, X, X_prior, y, n_channels, conv_idx=1,
                          enc_dec_idx=-1, **kwargs):
-    new_model = replace_conv_layer_channels(model, n_channels,
-                                            conv_idx=conv_idx,
-                                            enc_dec_idx=enc_dec_idx)
+    new_model, new_enc = replace_conv_layer_channels(
+                                    model, inf_enc, n_channels,
+                                    conv_idx=conv_idx,
+                                    enc_dec_idx=enc_dec_idx)
     freeze_layer(new_model, layer_idx=enc_dec_idx)
     _, conv_hist = train_seq2seq(new_model, X, X_prior, y, **kwargs)
     unfreeze_layer(new_model, layer_idx=enc_dec_idx)
 
-    return new_model, conv_hist
+    return new_model, new_enc, conv_hist
 
 
-def replace_conv_layer_channels(model, n_channels, conv_idx=1,
+def replace_conv_layer_channels(model, inf_enc, n_channels, conv_idx=1,
                                 enc_dec_idx=-1):
     input_layer = model.layers[conv_idx - 1]
     conv_layer = model.layers[conv_idx]
@@ -402,13 +480,15 @@ def replace_conv_layer_channels(model, n_channels, conv_idx=1,
 
     # create new model with new conv layer and old encoder-decoder module
     encoder_inputs = new_conv_layer(new_inputs)
-    enc_dec = model.layers[enc_dec_idx]
-    new_model = Model([new_inputs, enc_dec.input[1]],
-                      enc_dec([encoder_inputs, enc_dec.input[1]]))
+    enc_dec_model = model.layers[enc_dec_idx]
+    inf_enc_model = inf_enc.layers[enc_dec_idx]
+    new_model = Model([new_inputs, enc_dec_model.input[1]],
+                      enc_dec_model([encoder_inputs, enc_dec_model.input[1]]))
+    new_enc = Model(new_inputs, inf_enc_model(encoder_inputs))
 
     # compile with properties from old model
     new_model.compile(model.optimizer, model.loss, ['accuracy'])
-    return new_model
+    return new_model, new_enc
 
 
 def freeze_layer(model, layer_idx):
@@ -419,7 +499,13 @@ def freeze_layer(model, layer_idx):
 def unfreeze_layer(model, layer_idx):
     model.layers[layer_idx].trainable = True
     model.compile(model.optimizer, model.loss, ['accuracy'])
+     
 
+def cv_split_multi_pt(cv, X):
+    if isinstance(X, list):
+        return [cv.split(x) for x in X]
+    return cv.split(X)
+    
 
 def concat_hists(hist_list):
     # use first history as base
