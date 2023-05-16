@@ -9,6 +9,7 @@ from sklearn.model_selection import KFold
 from keras.optimizers import Adam
 
 from processing_utils.sequence_processing import decode_seq2seq
+from seq2seq_models.rnn_model_components import linear_cnn_1D_module
 from .train import train_seq2seq, shuffle_weights, track_model_history
 from .seq2seq_predict_callback import seq2seq_predict_callback
 
@@ -292,27 +293,111 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
     return fine_tune_model, total_hist
 
 
-def copy_applicable_weights(model, new_model, **kwargs):
-    """From https://datascience.stackexchange.com/questions/21734/keras-
-    transfer-learning-changing-input-tensor-shape
-    User: gebbissimo
+def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
+                         pretrain_epochs=200, conv_epochs=60,
+                         target_epochs=540, conv_layer_idx=1,
+                         enc_dec_layer_idx=-1, **kwargs):
+    """Train model with cross-patient transfer learning chain.
+
+    Function to perform cross-patient transfer learning by pretraining a model
+    on one or multiple patient(s) and then fine-tuning the model on a target
+    patient. This method is an extension of the method proposed by Makin et al.
+    2020 (https://www.nature.com/articles/s41593-020-0608-8) designed for
+    transfer from a single patient to a single patient. This function chains
+    together multiple Makin et al. transfer learning steps to pretrain across
+    multiple patients and transfer to a target patient.
+
+    Args:
+        model (Fucntional): Full encoder-decoder model
+        X1 (ndarray or list of ndarray): Array of feature data for pretrain
+            patient. If pretraining on multiple patients, each patient's
+            feature data should be a separate array in the list.
+        X1_prior (ndarray or list of ndarray): Shifted labels for teacher
+            forcing. Type should match X1. See X1 description for type info
+            when pretraining on single or multiple patients.
+        y1 (ndarray or list of ndarray): Labels. Type should match X1. See X1
+            description for type info when pretraining on single or multiple
+            patients.
+        X2 (ndarray): Feature data for target patient.
+        X2_prior (ndarray): Target patient shifted labels for teacher forcing.
+        y2 (ndarray): Labels for target patient.
+        pretrain_epochs (int, optional): Training epochs for pretraining step.
+            Defaults to 200.
+        conv_epochs (int, optional): Training epochs for convolutional layer
+            update step. Defaults to 60.
+        target_epochs (int, optional): Training epochs for full-network
+            training on target patient. Defaults to 540.
+
+    Returns:
+        Callback: Training performance history across all transfer stages.
     """
-    for layer in new_model.layers:
-        try:
-            layer.set_weights(model.get_layer(name=layer.name).get_weights())
-        except:
-            print("Could not transfer weights for layer {}".format(layer.name))
-    new_model.compile(**kwargs)
+    # parse pre-train input to check for multiple pts
+    if not isinstance(X1, list):  # data input as single pt
+        X1 = list(X1)
+        X1_prior = list(X1_prior)
+        y1 = list(y1)
+
+    # pretrain full model on first patient
+    _, pretrain_hist = train_seq2seq(model, X1[0], X1_prior[0], y1[0],
+                                     epochs=pretrain_epochs, **kwargs)
+
+    curr_hist = pretrain_hist
+    for i in range(1, len(X1)):
+        # update conv layer for current pretrain pt to better extract features
+        n_channels = X1[i].shape[-1]
+        conv_hist = transfer_conv_update(model, X1[i], X1_prior[i], y1[i],
+                                         n_channels, epochs=conv_epochs,
+                                         **kwargs)
+        # pretraining on current pretrain pt
+        _, pretrain_hist = train_seq2seq(model, X1[i], X1_prior[i], y1[i],
+                                         epochs=pretrain_epochs, **kwargs)
+        curr_hist = concat_hists([curr_hist, conv_hist, pretrain_hist])
+
+    # update conv layer for target pt
+    tar_channels = X2.shape[-1]
+    conv_hist = transfer_conv_update(model, X2, X2_prior, y2, tar_channels,
+                                     epochs=conv_epochs, **kwargs)
+
+    # fine-tuning on target pt
+    _, target_hist = train_seq2seq(model, X2, X2_prior, y2,
+                                   epochs=target_epochs, **kwargs)
+
+    total_hist = concat_hists([curr_hist, conv_hist, target_hist])
+
+    return total_hist
 
 
-def freeze_layer(model, layer_idx, **kwargs):
+def transfer_conv_update(model, X, X_prior, y, n_channels, conv_layer_idx=1,
+                         enc_dec_layer_idx=-1, **kwargs):
+    replace_conv_layer(model, n_channels, conv_layer_idx=conv_layer_idx)
+    freeze_layer(model, layer_idx=enc_dec_layer_idx)
+    _, conv_hist = train_seq2seq(model, X, X_prior, y, **kwargs)
+    unfreeze_layer(model, layer_idx=enc_dec_layer_idx)
+
+    return conv_hist
+
+
+def replace_conv_layer(model, n_channels, conv_layer_idx=1):
+    input_layer = model.layers[conv_layer_idx - 1]
+    conv_layer = model.layers[conv_layer_idx]
+    new_input_layer, new_conv_layer = linear_cnn_1D_module(
+                                        input_layer.shape[1],
+                                        n_channels, conv_layer.filters,
+                                        conv_layer.kernel_size,
+                                        conv_layer.kernel_regularizer.l2)
+    model.layers[conv_layer_idx - 1] = new_input_layer
+    model.layers[conv_layer_idx] = new_conv_layer
+    model.compile(model.optimizer, model.loss, model.metrics)
+
+
+def freeze_layer(model, layer_idx):
     model.layers[layer_idx].trainable = False
-    model.compile(**kwargs)
+    model.compile(model.optimizer, model.loss, model.metrics)
 
 
-def unfreeze_layer(model, layer_idx, **kwargs):
+def unfreeze_layer(model, layer_idx):
     model.layers[layer_idx].trainable = True
-    model.compile(**kwargs)
+    model.compile(model.optimizer, model.loss, model.metrics)
 
 
 def concat_hists(hist_list):
@@ -325,3 +410,16 @@ def concat_hists(hist_list):
             new_hist.history[key].extend(hist.history[key])
 
     return new_hist
+
+
+def copy_applicable_weights(model, new_model, **kwargs):
+    """From https://datascience.stackexchange.com/questions/21734/keras-
+    transfer-learning-changing-input-tensor-shape
+    User: gebbissimo
+    """
+    for layer in new_model.layers:
+        try:
+            layer.set_weights(model.get_layer(name=layer.name).get_weights())
+        except:
+            print("Could not transfer weights for layer {}".format(layer.name))
+    new_model.compile(**kwargs)
