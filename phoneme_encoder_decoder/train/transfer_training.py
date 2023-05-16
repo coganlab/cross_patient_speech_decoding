@@ -405,35 +405,6 @@ def replace_conv_layer_channels(model, n_channels, conv_idx=1,
     return new_model
 
 
-def replace_intermediate_layer_in_keras(model, layer_id, new_layer):
-    """Replace intermediate layer in a Keras model with a new layer.
-
-    From "https://stackoverflow.com/questions/49492255/how-to-replace-or-insert
-    -intermediate-layer-in-keras-model"
-    User: ZFTurbo
-
-    Args:
-        model (Functional): Keras model
-        layer_id (int): Index of layer to replace
-        new_layer (Layer): Keras layer to replace layer at layer_id with
-
-    Returns:
-        Fucntional: Keras model with new layer at layer_id
-    """
-
-    layers = [layer for layer in model.layers]
-
-    x = layers[0].output
-    for i in range(1, len(layers)):
-        if i == layer_id:
-            x = new_layer(x)
-        else:
-            x = layers[i](x)
-
-    new_model = Model(input=layers[0].input, output=x)
-    return new_model
-
-
 def freeze_layer(model, layer_idx):
     model.layers[layer_idx].trainable = False
     model.compile(model.optimizer, model.loss, ['accuracy'])
