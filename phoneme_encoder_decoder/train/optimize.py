@@ -13,7 +13,7 @@ from sklearn.metrics import balanced_accuracy_score
 sys.path.insert(0, '..')
 
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
-                                         stacked_gru_1Dcnn_model)
+                                       stacked_gru_1Dcnn_model)
 from train.train import train_seq2seq_kfold
 
 
@@ -31,16 +31,16 @@ class encDecHyperModel(kt.HyperModel):
         unit_vals = [64, 128, 256, 512, 800, 1024]
         reg_vals = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6]
         filter_size = 10
-        learning_rate = 1e-3
+        l_rates = [1e-3, 1e-4, 1e-5, 1e-6]
+        # learning_rate = 1e-3
 
-        # l_rates = [1e-3, 1e-4, 1e-5, 1e-6]
         models = hp.Choice('model_type', values=model_list)
         n_filters = hp.Int('num_filts', min_value=10, max_value=200, step=10)
         n_layers = hp.Int('num_layers', min_value=1, max_value=3, step=1)
         # filter_size = hp.Int('filt_size', min_value=3, max_value=10, step=1)
         n_units = hp.Choice('rnn_units', values=unit_vals)
         reg_lambda = hp.Choice('reg_lambda', values=reg_vals)
-        # learning_rate = hp.Choice('learning_rate', values=l_rates)
+        learning_rate = hp.Choice('learning_rate', values=l_rates)
 
         # build model (args define static model parameters like output dim)
         train, inf_enc, inf_dec = self.select_model(models, *self.model_args,
@@ -70,6 +70,10 @@ class encDecTuner(kt.Tuner):
     def run_trial(self, trial, X, X_prior, y, *args, **kwargs):
         hp = trial.hyperparameters
         batch_size = X.shape[0]
+
+        epochs = hp.Int('epochs', min_value=100, max_value=800, step=100)
+        # epochs = 800
+
         # create model with hyperparameter space
         model, inf_enc, inf_dec = self.hypermodel.build(hp)
 
@@ -77,6 +81,7 @@ class encDecTuner(kt.Tuner):
         _, y_pred, y_test = self.hypermodel.fit(model, inf_enc, inf_dec,
                                                 X, X_prior, y, *args,
                                                 batch_size=batch_size,
+                                                epochs=epochs,
                                                 **kwargs)
         # evaluate through validation accuracy
         val_accuracy = balanced_accuracy_score(y_test, y_pred)

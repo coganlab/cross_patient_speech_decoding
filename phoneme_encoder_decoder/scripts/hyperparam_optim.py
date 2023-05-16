@@ -103,8 +103,8 @@ def hyperparam_optim():
     # keras tuner optimization
     max_optim_trials = 200
     tuning_dir = 'rnn_tuning'
-    project_dir = f'{pt}_1Dcnn_EncDec_{oracle_type}'
-    tuning_epochs = 800
+    project_dir = f'{pt}_1Dcnn_EncDec_train_params_{oracle_type}'
+    # tuning_epochs = 800
     hyper_model = encDecHyperModel(n_input_time, n_input_channel, n_output,
                                    dropout=dropout, bidir=bidir)
     obj_name = 'seq2seq_val_accuracy'
@@ -121,7 +121,8 @@ def hyperparam_optim():
     rnn_optimizer = encDecTuner(hypermodel=hyper_model, oracle=oracle,
                                 directory=DATA_PATH + tuning_dir,
                                 project_name=project_dir)
-    rnn_optimizer.search(X_train, X_prior_train, y_train, epochs=tuning_epochs)
+    # rnn_optimizer.search(X_train, X_prior_train, y_train, epochs=tuning_epochs)
+    rnn_optimizer.search(X_train, X_prior_train, y_train)
 
     # save trial data to text file
     summary_path = DATA_PATH + tuning_dir + '/' + project_dir +\
