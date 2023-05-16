@@ -296,8 +296,8 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
 
 def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
                          pretrain_epochs=200, conv_epochs=60,
-                         target_epochs=540, conv_layer_idx=1,
-                         enc_dec_layer_idx=-1, **kwargs):
+                         target_epochs=540, conv_idx=1, enc_dec_idx=-1,
+                         **kwargs):
     """Train model with cross-patient transfer learning chain.
 
     Function to perform cross-patient transfer learning by pretraining a model
@@ -306,7 +306,8 @@ def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
     2020 (https://www.nature.com/articles/s41593-020-0608-8) designed for
     transfer from a single patient to a single patient. This function chains
     together multiple Makin et al. transfer learning steps to pretrain across
-    multiple patients and transfer to a target patient.
+    multiple patients and transfer to a target patient. Keyword arguments are
+    passed to the train_seq2seq function defined in train.py.
 
     Args:
         model (Fucntional): Full encoder-decoder model
@@ -348,7 +349,10 @@ def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
         n_channels = X1[i].shape[-1]
         model, conv_hist = transfer_conv_update(model, X1[i], X1_prior[i],
                                                 y1[i], n_channels,
-                                                epochs=conv_epochs, **kwargs)
+                                                epochs=conv_epochs,
+                                                conv_idx=conv_idx,
+                                                enc_dec_idx=enc_dec_idx,
+                                                **kwargs)
         # pretraining on current pretrain pt
         _, pretrain_hist = train_seq2seq(model, X1[i], X1_prior[i], y1[i],
                                          epochs=pretrain_epochs, **kwargs)
@@ -358,6 +362,8 @@ def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
     tar_channels = X2.shape[-1]
     model, conv_hist = transfer_conv_update(model, X2, X2_prior, y2,
                                             tar_channels, epochs=conv_epochs,
+                                            conv_idx=conv_idx,
+                                            enc_dec_idx=enc_dec_idx,
                                             **kwargs)
 
     # fine-tuning on target pt
