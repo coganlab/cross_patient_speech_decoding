@@ -294,82 +294,96 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
     return fine_tune_model, total_hist
 
 
-# def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
-#                          X2_prior, y2, num_folds=10, num_reps=3, **kwargs):
-#     # save initial weights to reset model for each fold
-#     init_train_w = model.get_weights()
+def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
+                         X2_prior, y2, num_folds=10, num_reps=3, **kwargs):
+    # save initial weights to reset model for each fold
+    init_train_w = model.get_weights()
 
-#     n_output = y2.shape[-1]  # number of output classes
-#     seq_len = y2.shape[-2]  # length of output sequence
+    X1, X1_prior, y1 = multi_pt_compat(X1, X1_prior, y1)
 
-#     # define k-fold cross validation
-#     cv = KFold(n_splits=num_folds, shuffle=True)
-#     pre_splits = cv_split_multi_pt(cv, X1)
-#     tar_splits = cv.split(X2)
+    n_output = y2.shape[-1]  # number of output classes
+    seq_len = y2.shape[-2]  # length of output sequence
 
-#     # dictionary for tracking history of each fold
-#     histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
-#                  'val_loss': []}
+    # define k-fold cross validation
+    cv = KFold(n_splits=num_folds, shuffle=True)
+    pre_splits = [cv.split(x) for x in X1]
+    tar_splits = cv.split(X2)
 
-#     # cv training
-#     y_pred_all, y_test_all = [], []
-#     for f in range(num_folds):
-#         train_ind1, test_ind1 = next(pre_splits)
-#         train_ind2, test_ind2 = next(tar_splits)
-#         fold = f + 1
-#         print(f'===== Fold {fold} =====')
-#         for _ in range(num_reps):  # repeat fold for stability
+    # dictionary for tracking history of each fold
+    histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
+                 'val_loss': []}
 
-#             # reset model weights for current fold (also resets associated
-#             # inference weights)
-#             shuffle_weights(model, weights=init_train_w)
+    # cv training
+    y_pred_all, y_test_all = [], []
+    for f in range(num_folds):
+        pre_inds = [next(s) for s in pre_splits]
+        train_ind_pre, test_ind_pre = zip(*pre_inds)
+        train_ind_tar, test_ind_tar = next(tar_splits)
+        fold = f + 1
+        print(f'===== Fold {fold} =====')
+        for _ in range(num_reps):  # repeat fold for stability
 
-#             transfer_hist, y_pred_fold, y_test_fold = \
-#                 transfer_chain_single_fold(model, inf_enc,
-#                                            inf_dec, X1, X1_prior, y1,
-#                                            X2, X2_prior, y2, train_ind1,
-#                                            test_ind1, train_ind2, test_ind2,
-#                                            **kwargs)
+            # reset model weights for current fold (also resets associated
+            # inference weights)
+            shuffle_weights(model, weights=init_train_w)
 
-#             # track history in-place
-#             track_model_history(histories, transfer_hist)
+            transfer_hist, y_pred_fold, y_test_fold = \
+                transfer_chain_single_fold(model, inf_enc,
+                                           inf_dec, X1, X1_prior, y1,
+                                           X2, X2_prior, y2, train_ind_pre,
+                                           test_ind_pre, train_ind_tar,
+                                           test_ind_tar, **kwargs)
 
-#             y_pred_all.extend(y_pred_fold)
-#             y_test_all.extend(y_test_fold)
+            # track history in-place
+            track_model_history(histories, transfer_hist)
 
-#     return histories, np.array(y_pred_all), np.array(y_test_all)
+            y_pred_all.extend(y_pred_fold)
+            y_test_all.extend(y_test_fold)
+
+    return histories, np.array(y_pred_all), np.array(y_test_all)
 
 
-# def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
-#                                X1_prior, y1, X2, X2_prior, y2,
-#                                train_ind1, test_ind1, train_ind2, test_ind2,
-#                                **kwargs):
-#     data_split_multi_pt(X1, X1_prior, y1, train_ind1, test_ind1)
-#     X1_train, X1_test = X1[train_ind1], X1[test_ind1]
-#     X1_prior_train, X1_prior_test = X1_prior[train_ind1], X1_prior[test_ind1]
-#     y1_train, y1_test = y1[train_ind1], y1[test_ind1]
+def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
+                               X1_prior, y1, X2, X2_prior, y2,
+                               train_ind_pre, test_ind_pre, train_ind_tar,
+                               test_ind_tar, **kwargs):
 
-#     data_split_multi_pt(X2, X2_prior, y2, train_ind2, test_ind)
-#     X2_train, X2_test = X2[train_ind2], X2[test_ind2]
-#     X2_prior_train, X2_prior_test = X2_prior[train_ind2], X2_prior[test_ind2]
-#     y2_train, y2_test = y2[train_ind2], y2[test_ind2]
+    # split pretrain data into train and test (may be list with multi pt data)
+    X1_train, X1_test = ([x[train_ind_pre] for x in X1],
+                         [x[test_ind_pre] for x in X1])
+    X1_prior_train, X1_prior_test = ([xp[train_ind_pre] for xp in X1_prior],
+                                     [xp[test_ind_pre] for xp in X1_prior])
+    y1_train, y1_test = ([y[train_ind_pre] for y in y1],
+                         [y[test_ind_pre] for y in y1])
 
-#     model, inf_enc, transfer_hist = transfer_train_chain(
-#                                             model, inf_enc, X1_train,
-#                                             X1_prior_train, y1_train, X2_train,
-#                                             X2_prior_train, y2_train,
-#                                             **kwargs)
+    # split target data into train and test
+    X2_train, X2_test = X2[train_ind_tar], X2[test_ind_tar]
+    X2_prior_train, X2_prior_test = (X2_prior[train_ind_tar],
+                                     X2_prior[test_ind_tar])
+    y2_train, y2_test = y2[train_ind_tar], y2[test_ind_tar]
 
-#     y_test_fold, y_pred_fold = decode_seq2seq(inf_enc, inf_dec, X2_test,
-#                                               y2_test)
+    # define validation data (preserve list format for multi pt pretrain data)
+    pre_val = ([([x, xp], y) for (x, xp, y) in
+                zip(X1_test, X1_prior_test, y1_test)])
+    tar_val = ([X2_test, X2_prior_test], y2_test)
 
-#     return transfer_hist, y_test_fold, y_pred_fold
+    model, inf_enc, transfer_hist = transfer_train_chain(
+                                            model, inf_enc, X1_train,
+                                            X1_prior_train, y1_train, X2_train,
+                                            X2_prior_train, y2_train,
+                                            pre_val=pre_val, tar_val=tar_val,
+                                            **kwargs)
+
+    y_test_fold, y_pred_fold = decode_seq2seq(inf_enc, inf_dec, X2_test,
+                                              y2_test)
+
+    return transfer_hist, y_test_fold, y_pred_fold
 
 
 def transfer_train_chain(model, inf_enc, X1, X1_prior, y1, X2, X2_prior, y2,
                          pretrain_epochs=200, conv_epochs=60,
-                         target_epochs=540, conv_idx=1, enc_dec_idx=-1,
-                         **kwargs):
+                         target_epochs=540, pre_val=None, tar_val=None,
+                         conv_idx=1, enc_dec_idx=-1, **kwargs):
     """Train model with cross-patient transfer learning chain.
 
     Function to perform cross-patient transfer learning by pretraining a model
@@ -409,14 +423,13 @@ def transfer_train_chain(model, inf_enc, X1, X1_prior, y1, X2, X2_prior, y2,
             performance history across all transfer stages.
     """
     # parse pre-train input to check for multiple pts
-    if not isinstance(X1, list):  # data input as single pt
-        X1 = list(X1[np.newaxis, ...])
-        X1_prior = list(X1_prior[np.newaxis, ...])
-        y1 = list(y1[np.newaxis, ...])
+    X1, X1_prior, y1 = multi_pt_compat(X1, X1_prior, y1)
 
     # pretrain full model on first patient
     _, pretrain_hist = train_seq2seq(model, X1[0], X1_prior[0], y1[0],
-                                     epochs=pretrain_epochs, **kwargs)
+                                     epochs=pretrain_epochs,
+                                     validation_data=pre_val[0],
+                                     **kwargs)
 
     curr_hist = pretrain_hist
     for i in range(1, len(X1)):
@@ -425,31 +438,45 @@ def transfer_train_chain(model, inf_enc, X1, X1_prior, y1, X2, X2_prior, y2,
         model, inf_enc, conv_hist = transfer_conv_update(
                                             model, inf_enc, X1[i], X1_prior[i],
                                             y1[i], n_channels,
-                                            epochs=conv_epochs,
                                             conv_idx=conv_idx,
                                             enc_dec_idx=enc_dec_idx,
+                                            epochs=conv_epochs,
+                                            validation_data=pre_val[i],
                                             **kwargs)
         # pretraining on current pretrain pt
         _, pretrain_hist = train_seq2seq(model, X1[i], X1_prior[i], y1[i],
-                                         epochs=pretrain_epochs, **kwargs)
+                                         epochs=pretrain_epochs,
+                                         validation_data=pre_val[i],
+                                         **kwargs)
         curr_hist = concat_hists([curr_hist, conv_hist, pretrain_hist])
 
     # update conv layer for target pt
     tar_channels = X2.shape[-1]
     model, inf_enc, conv_hist = transfer_conv_update(
                                             model, inf_enc, X2, X2_prior, y2,
-                                            tar_channels, epochs=conv_epochs,
+                                            tar_channels,
                                             conv_idx=conv_idx,
                                             enc_dec_idx=enc_dec_idx,
+                                            epochs=conv_epochs,
+                                            validation_data=tar_val,
                                             **kwargs)
 
     # fine-tuning on target pt
     _, target_hist = train_seq2seq(model, X2, X2_prior, y2,
-                                   epochs=target_epochs, **kwargs)
+                                   epochs=target_epochs,
+                                   validation_data=tar_val, **kwargs)
 
     total_hist = concat_hists([curr_hist, conv_hist, target_hist])
 
     return model, inf_enc, total_hist
+
+
+def multi_pt_compat(X, X_prior, y):
+    if not isinstance(X, list):
+        X = list(X[np.newaxis, ...])
+        X_prior = list(X_prior[np.newaxis, ...])
+        y = list(y[np.newaxis, ...])
+    return X, X_prior, y
 
 
 def transfer_conv_update(model, inf_enc, X, X_prior, y, n_channels, conv_idx=1,
@@ -499,13 +526,13 @@ def freeze_layer(model, layer_idx):
 def unfreeze_layer(model, layer_idx):
     model.layers[layer_idx].trainable = True
     model.compile(model.optimizer, model.loss, ['accuracy'])
-     
+
 
 def cv_split_multi_pt(cv, X):
     if isinstance(X, list):
         return [cv.split(x) for x in X]
     return cv.split(X)
-    
+
 
 def concat_hists(hist_list):
     # use first history as base
