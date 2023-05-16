@@ -7,6 +7,7 @@ Author: Zac Spalding
 import numpy as np
 from sklearn.model_selection import KFold
 from keras.optimizers import Adam
+from keras.models import Model
 
 from processing_utils.sequence_processing import decode_seq2seq
 from seq2seq_models.rnn_model_components import linear_cnn_1D_module
@@ -369,7 +370,9 @@ def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
 
 def transfer_conv_update(model, X, X_prior, y, n_channels, conv_layer_idx=1,
                          enc_dec_layer_idx=-1, **kwargs):
-    replace_conv_layer(model, n_channels, conv_layer_idx=conv_layer_idx)
+    model = replace_conv_layer_channels(model, n_channels,
+                                        conv_layer_idx=conv_layer_idx,
+                                        enc_dec_layer_idx=enc_dec_layer_idx)
     freeze_layer(model, layer_idx=enc_dec_layer_idx)
     _, conv_hist = train_seq2seq(model, X, X_prior, y, **kwargs)
     unfreeze_layer(model, layer_idx=enc_dec_layer_idx)
@@ -377,18 +380,57 @@ def transfer_conv_update(model, X, X_prior, y, n_channels, conv_layer_idx=1,
     return conv_hist
 
 
-def replace_conv_layer(model, n_channels, conv_layer_idx=1):
+def replace_conv_layer_channels(model, n_channels, conv_layer_idx=1,
+                                enc_dec_layer_idx=-1):
     input_layer = model.layers[conv_layer_idx - 1]
     conv_layer = model.layers[conv_layer_idx]
     reg_val = float(conv_layer.kernel_regularizer.l2)
-    new_input_layer, new_conv_layer = linear_cnn_1D_module(
+
+    # define new input and conv layers for new channel amount
+    new_inputs, new_conv_layer = linear_cnn_1D_module(
                                         input_layer.input_shape[0][1],
                                         n_channels, conv_layer.filters,
                                         conv_layer.kernel_size,
                                         reg_val)
-    model.layers[conv_layer_idx - 1] = new_input_layer
-    model.layers[conv_layer_idx] = new_conv_layer
-    model.compile(model.optimizer, model.loss, model.metrics)
+
+    # create new model with new conv layer and old encoder-decoder module
+    encoder_inputs = new_conv_layer(new_inputs)
+    enc_dec = model.layers[enc_dec_layer_idx]
+    new_model = Model([new_inputs, enc_dec.input[1]],
+                      enc_dec([encoder_inputs, enc_dec.input[1]]))
+
+    # compile with properties from old model
+    new_model.compile(model.optimizer, model.loss, model.metrics)
+    return new_model
+
+
+def replace_intermediate_layer_in_keras(model, layer_id, new_layer):
+    """Replace intermediate layer in a Keras model with a new layer.
+
+    From "https://stackoverflow.com/questions/49492255/how-to-replace-or-insert
+    -intermediate-layer-in-keras-model"
+    User: ZFTurbo
+
+    Args:
+        model (Functional): Keras model
+        layer_id (int): Index of layer to replace
+        new_layer (Layer): Keras layer to replace layer at layer_id with
+
+    Returns:
+        Fucntional: Keras model with new layer at layer_id
+    """
+
+    layers = [layer for layer in model.layers]
+
+    x = layers[0].output
+    for i in range(1, len(layers)):
+        if i == layer_id:
+            x = new_layer(x)
+        else:
+            x = layers[i](x)
+
+    new_model = Model(input=layers[0].input, output=x)
+    return new_model
 
 
 def freeze_layer(model, layer_idx):
