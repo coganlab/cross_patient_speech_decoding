@@ -346,9 +346,9 @@ def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
     for i in range(1, len(X1)):
         # update conv layer for current pretrain pt to better extract features
         n_channels = X1[i].shape[-1]
-        conv_hist = transfer_conv_update(model, X1[i], X1_prior[i], y1[i],
-                                         n_channels, epochs=conv_epochs,
-                                         **kwargs)
+        model, conv_hist = transfer_conv_update(model, X1[i], X1_prior[i],
+                                                y1[i], n_channels,
+                                                epochs=conv_epochs, **kwargs)
         # pretraining on current pretrain pt
         _, pretrain_hist = train_seq2seq(model, X1[i], X1_prior[i], y1[i],
                                          epochs=pretrain_epochs, **kwargs)
@@ -356,8 +356,9 @@ def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
 
     # update conv layer for target pt
     tar_channels = X2.shape[-1]
-    conv_hist = transfer_conv_update(model, X2, X2_prior, y2, tar_channels,
-                                     epochs=conv_epochs, **kwargs)
+    model, conv_hist = transfer_conv_update(model, X2, X2_prior, y2,
+                                            tar_channels, epochs=conv_epochs,
+                                            **kwargs)
 
     # fine-tuning on target pt
     _, target_hist = train_seq2seq(model, X2, X2_prior, y2,
@@ -365,25 +366,25 @@ def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
 
     total_hist = concat_hists([curr_hist, conv_hist, target_hist])
 
-    return total_hist
+    return model, total_hist
 
 
-def transfer_conv_update(model, X, X_prior, y, n_channels, conv_layer_idx=1,
-                         enc_dec_layer_idx=-1, **kwargs):
-    model = replace_conv_layer_channels(model, n_channels,
-                                        conv_layer_idx=conv_layer_idx,
-                                        enc_dec_layer_idx=enc_dec_layer_idx)
-    freeze_layer(model, layer_idx=enc_dec_layer_idx)
-    _, conv_hist = train_seq2seq(model, X, X_prior, y, **kwargs)
-    unfreeze_layer(model, layer_idx=enc_dec_layer_idx)
+def transfer_conv_update(model, X, X_prior, y, n_channels, conv_idx=1,
+                         enc_dec_idx=-1, **kwargs):
+    new_model = replace_conv_layer_channels(model, n_channels,
+                                            conv_idx=conv_idx,
+                                            enc_dec_idx=enc_dec_idx)
+    freeze_layer(new_model, layer_idx=enc_dec_idx)
+    _, conv_hist = train_seq2seq(new_model, X, X_prior, y, **kwargs)
+    unfreeze_layer(new_model, layer_idx=enc_dec_idx)
 
-    return conv_hist
+    return new_model, conv_hist
 
 
-def replace_conv_layer_channels(model, n_channels, conv_layer_idx=1,
-                                enc_dec_layer_idx=-1):
-    input_layer = model.layers[conv_layer_idx - 1]
-    conv_layer = model.layers[conv_layer_idx]
+def replace_conv_layer_channels(model, n_channels, conv_idx=1,
+                                enc_dec_idx=-1):
+    input_layer = model.layers[conv_idx - 1]
+    conv_layer = model.layers[conv_idx]
     reg_val = float(conv_layer.kernel_regularizer.l2)
 
     # define new input and conv layers for new channel amount
@@ -395,12 +396,12 @@ def replace_conv_layer_channels(model, n_channels, conv_layer_idx=1,
 
     # create new model with new conv layer and old encoder-decoder module
     encoder_inputs = new_conv_layer(new_inputs)
-    enc_dec = model.layers[enc_dec_layer_idx]
+    enc_dec = model.layers[enc_dec_idx]
     new_model = Model([new_inputs, enc_dec.input[1]],
                       enc_dec([encoder_inputs, enc_dec.input[1]]))
 
     # compile with properties from old model
-    new_model.compile(model.optimizer, model.loss, model.metrics)
+    new_model.compile(model.optimizer, model.loss, ['accuracy'])
     return new_model
 
 
@@ -435,12 +436,12 @@ def replace_intermediate_layer_in_keras(model, layer_id, new_layer):
 
 def freeze_layer(model, layer_idx):
     model.layers[layer_idx].trainable = False
-    model.compile(model.optimizer, model.loss, model.metrics)
+    model.compile(model.optimizer, model.loss, ['accuracy'])
 
 
 def unfreeze_layer(model, layer_idx):
     model.layers[layer_idx].trainable = True
-    model.compile(model.optimizer, model.loss, model.metrics)
+    model.compile(model.optimizer, model.loss, ['accuracy'])
 
 
 def concat_hists(hist_list):
