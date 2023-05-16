@@ -333,9 +333,9 @@ def transfer_train_chain(model, X1, X1_prior, y1, X2, X2_prior, y2,
     """
     # parse pre-train input to check for multiple pts
     if not isinstance(X1, list):  # data input as single pt
-        X1 = list(X1)
-        X1_prior = list(X1_prior)
-        y1 = list(y1)
+        X1 = list(X1[np.newaxis, ...])
+        X1_prior = list(X1_prior[np.newaxis, ...])
+        y1 = list(y1[np.newaxis, ...])
 
     # pretrain full model on first patient
     _, pretrain_hist = train_seq2seq(model, X1[0], X1_prior[0], y1[0],
@@ -380,11 +380,12 @@ def transfer_conv_update(model, X, X_prior, y, n_channels, conv_layer_idx=1,
 def replace_conv_layer(model, n_channels, conv_layer_idx=1):
     input_layer = model.layers[conv_layer_idx - 1]
     conv_layer = model.layers[conv_layer_idx]
+    reg_val = float(conv_layer.kernel_regularizer.l2)
     new_input_layer, new_conv_layer = linear_cnn_1D_module(
-                                        input_layer.shape[1],
+                                        input_layer.input_shape[0][1],
                                         n_channels, conv_layer.filters,
                                         conv_layer.kernel_size,
-                                        conv_layer.kernel_regularizer.l2)
+                                        reg_val)
     model.layers[conv_layer_idx - 1] = new_input_layer
     model.layers[conv_layer_idx] = new_conv_layer
     model.compile(model.optimizer, model.loss, model.metrics)
