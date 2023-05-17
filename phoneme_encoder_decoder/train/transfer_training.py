@@ -422,16 +422,26 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
     """
     # parse pre-train input to check for multiple pts
     X1, X1_prior, y1 = multi_pt_compat(X1, X1_prior, y1)
+    pre_val = val_data_to_list(pre_val)
 
-    # define callback to calculate seq2seq metrics
-    seq2seq_cb = Seq2seqPredictCallback(model, inf_enc, inf_dec, X1[0], y1[0])
+    # check if val data is provided
+    do_val = pre_val is not None and tar_val is not None
+    cb = None
+
+    # define callback to calculate seq2seq metrics during training
+    if do_val:
+        # val data for first pretrain patient - feature data and labels
+        X1_test, y1_test = pre_val[0][0][0], pre_val[0][1]
+        seq2seq_cb = Seq2seqPredictCallback(model, inf_enc, inf_dec, X1_test,
+                                            y1_test)
+        cb = [seq2seq_cb]
 
     # pretrain full model on first patient
     _, pretrain_hist = train_seq2seq(
                             model, X1[0], X1_prior[0], y1[0],
                             epochs=pretrain_epochs,
-                            validation_data=pre_val[0] if pre_val else None,
-                            callbacks=[seq2seq_cb],
+                            validation_data=pre_val[0] if do_val else None,
+                            callbacks=cb,
                             **kwargs)
 
     curr_hist = pretrain_hist
@@ -444,23 +454,26 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                                     enc_dec_idx=enc_dec_idx)
 
         # make sure seq2seq_cb is using current pretrain pt models and data
-        seq2seq_cb.set_models(model, inf_enc, inf_dec)
-        seq2seq_cb.set_data(X1[i], y1[i])
+        if do_val:
+            X1_test, y1_test = pre_val[i][0][0], pre_val[i][1]
+            seq2seq_cb.set_models(model, inf_enc, inf_dec)
+            seq2seq_cb.set_data(X1_test, y1_test)
+            cb = [seq2seq_cb]
 
         # update conv layer for current pretrain pt to better extract features
         conv_hist = transfer_conv_update(
                             model, X1[i], X1_prior[i], y1[i],
                             enc_dec_idx=enc_dec_idx,
                             epochs=conv_epochs,
-                            validation_data=pre_val[i] if pre_val else None,
-                            callbacks=[seq2seq_cb],
+                            validation_data=pre_val[i] if do_val else None,
+                            callbacks=cb,
                             **kwargs)
         # pretraining on current pretrain pt
         _, pretrain_hist = train_seq2seq(
                             model, X1[i], X1_prior[i], y1[i],
                             epochs=pretrain_epochs,
-                            validation_data=pre_val[i] if pre_val else None,
-                            callbacks=[seq2seq_cb],
+                            validation_data=pre_val[i] if do_val else None,
+                            callbacks=cb,
                             **kwargs)
         curr_hist = concat_hists([curr_hist, conv_hist, pretrain_hist])
 
@@ -472,8 +485,11 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                                     enc_dec_idx=enc_dec_idx)
 
     # make sure seq2seq_cb is using target pt models and data
-    seq2seq_cb.set_models(model, inf_enc, inf_dec)
-    seq2seq_cb.set_data(X2, y2)
+    if do_val:
+        X2_test, y2_test = tar_val[0][0], tar_val[1]
+        seq2seq_cb.set_models(model, inf_enc, inf_dec)
+        seq2seq_cb.set_data(X2_test, y2_test)
+        cb = [seq2seq_cb]
 
     # update conv layer weights for target pt
     conv_hist = transfer_conv_update(
@@ -481,14 +497,14 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                             enc_dec_idx=enc_dec_idx,
                             epochs=conv_epochs,
                             validation_data=tar_val,
-                            callbacks=[seq2seq_cb],
+                            callbacks=cb,
                             **kwargs)
 
     # fine-tuning on target pt
     _, target_hist = train_seq2seq(model, X2, X2_prior, y2,
                                    epochs=target_epochs,
                                    validation_data=tar_val,
-                                   callbacks=[seq2seq_cb], **kwargs)
+                                   callbacks=cb, **kwargs)
 
     total_hist = concat_hists([curr_hist, conv_hist, target_hist])
 
@@ -501,6 +517,14 @@ def multi_pt_compat(X, X_prior, y):
         X_prior = list(X_prior[np.newaxis, ...])
         y = list(y[np.newaxis, ...])
     return X, X_prior, y
+
+
+def val_data_to_list(val_data):
+    if not isinstance(val_data, list):
+        tmp = []
+        tmp.append(val_data)
+        return tmp
+    return val_data
 
 
 def transfer_conv_update(model, X, X_prior, y, enc_dec_idx=-1, **kwargs):
