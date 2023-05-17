@@ -347,12 +347,14 @@ def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
                                test_ind_tar, **kwargs):
 
     # split pretrain data into train and test (may be list with multi pt data)
-    X1_train, X1_test = ([x[train_ind_pre] for x in X1],
-                         [x[test_ind_pre] for x in X1])
-    X1_prior_train, X1_prior_test = ([xp[train_ind_pre] for xp in X1_prior],
-                                     [xp[test_ind_pre] for xp in X1_prior])
-    y1_train, y1_test = ([y[train_ind_pre] for y in y1],
-                         [y[test_ind_pre] for y in y1])
+    X1_train, X1_test = ([x[train_ind_pre[i]] for i, x in enumerate(X1)],
+                         [x[test_ind_pre[i]] for i, x in enumerate(X1)])
+    X1_prior_train, X1_prior_test = ([xp[train_ind_pre[i]] for i, xp in
+                                      enumerate(X1_prior)],
+                                     [xp[test_ind_pre[i]] for i, xp in
+                                      enumerate(X1_prior)])
+    y1_train, y1_test = ([y[train_ind_pre[i]] for i, y in enumerate(y1)],
+                         [y[test_ind_pre[i]] for i, y in enumerate(y1)])
 
     # split target data into train and test
     X2_train, X2_test = X2[train_ind_tar], X2[test_ind_tar]
@@ -366,7 +368,7 @@ def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
     tar_val = ([X2_test, X2_prior_test], y2_test)
 
     model, inf_enc, transfer_hist = transfer_train_chain(
-                                            model, inf_enc, X1_train,
+                                            model, inf_enc, inf_dec, X1_train,
                                             X1_prior_train, y1_train, X2_train,
                                             X2_prior_train, y2_train,
                                             pre_val=pre_val, tar_val=tar_val,
@@ -392,6 +394,7 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
     together multiple Makin et al. transfer learning steps to pretrain across
     multiple patients and transfer to a target patient. Keyword arguments are
     passed to the train_seq2seq function defined in train.py.
+    *****TODO UPDATE*****
 
     Args:
         model (Fucntional): Full encoder-decoder model
