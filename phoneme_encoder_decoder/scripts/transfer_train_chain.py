@@ -127,7 +127,7 @@ def transfer_train_rnn():
     bidir = True
 
     # Train model
-    num_folds = 10  # 10
+    num_folds = 5  # 5
     num_reps = 3  # 3
     batch_size = 200
     learning_rate = 1e-3
@@ -174,20 +174,22 @@ def transfer_train_rnn():
         cmat = confusion_matrix(y_test_all, y_pred_all,
                                 labels=range(1, n_output))
 
-        if inputs['out_filename'] != '':
-            acc_filename = DATA_PATH + 'outputs/' + inputs['out_filename'] \
+        if inputs['filename'] != '':
+            acc_filename = DATA_PATH + 'outputs/' + inputs['filename'] \
                            + '.pkl'
         else:
             acc_filename = DATA_PATH + ('outputs/transfer_'
-                                        f'{pretrain_list}-{target_pt}'
+                                        f'[{"-".join(pretrain_list)}]'
+                                        f'-{target_pt}'
                                         f'{norm_ext}_acc_kfold.pkl')
         
         # save performance
         append_pkl_accs(acc_filename, val_acc, cmat)
         plot_accuracy_loss(k_hist, epochs=total_epochs, save_fig=True,
                             save_path=DATA_PATH +
-                            (f'outputs/plots/transfer_{pretrain_list}-'
-                            f'{target_pt}_kfold_train_{i+1}.png'))
+                            (f'outputs/plots/transfer_'
+                             f'[{"-".join(pretrain_list)}]-'
+                             f'{target_pt}_kfold_train_{i+1}.png'))
 
 
 if __name__ == '__main__':
