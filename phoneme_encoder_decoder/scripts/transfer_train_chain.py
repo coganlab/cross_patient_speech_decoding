@@ -4,7 +4,6 @@ Script to cross-patient transfer train a RNN model on the DCC.
 
 import os
 import sys
-import pickle
 import argparse
 from keras.optimizers import Adam
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
@@ -12,8 +11,8 @@ from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 sys.path.insert(0, '..')
 
 from processing_utils.feature_data_from_mat import get_high_gamma_data
-from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
-                                                  decode_seq2seq)
+from processing_utils.sequence_processing import pad_sequence_teacher_forcing
+from processing_utils.data_saving import append_pkl_accs
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                        stacked_gru_1Dcnn_model)
 from train.transfer_training import transfer_chain_kfold
@@ -189,29 +188,6 @@ def transfer_train_rnn():
                             save_path=DATA_PATH +
                             (f'outputs/plots/transfer_{pretrain_list}-'
                             f'{target_pt}_kfold_train_{i+1}.png'))
-            
-
-def append_pkl_accs(filename, acc, cmat, acc_key='val_acc', cmat_key='cmat'):
-    # load in previous data if it exists
-    data = load_pkl_accs(filename)
-
-    # append new data to loaded data list
-    if acc_key not in data:
-        data[acc_key] = []
-        data[cmat_key] = []
-    data[acc_key].append(acc)
-    data[cmat_key].append(cmat)
-
-    # save new data
-    with open(filename, 'wb+') as f:
-        pickle.dump(data, f, protocol=-1)
-
-
-def load_pkl_accs(filename):
-    if os.path.isfile(filename):
-        with open(filename, 'rb') as f:
-            return pickle.load(f)
-    return {}
 
 
 if __name__ == '__main__':
