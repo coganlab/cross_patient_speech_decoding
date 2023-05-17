@@ -39,7 +39,7 @@ def init_parser():
     parser.add_argument('-c', '--cluster', type=str, default='True',
                         required=False,
                         help='Run on cluster (True) or local (False)')
-    parser.add_argument('-o', '--out_filename', type=str, default='',
+    parser.add_argument('-f', '--filename', type=str, default='',
                         required=False,
                         help='Output filename for accuracy csv')
     return parser
