@@ -127,14 +127,14 @@ def transfer_train_rnn():
     bidir = True
 
     # Train model
-    num_folds = 2  # 10
-    num_reps = 1  # 3
+    num_folds = 10  # 10
+    num_reps = 3  # 3
     batch_size = 200
     learning_rate = 1e-3
 
-    pre_epochs = 2  # 200
-    conv_epochs = 3  # 60
-    tar_epochs = 5  # 540  
+    pre_epochs = 200  # 200
+    conv_epochs = 60  # 60
+    tar_epochs = 540  # 540  
     total_epochs = len(chain_X_pre) * (pre_epochs + conv_epochs) + tar_epochs
 
     for i in range(n_iter):
