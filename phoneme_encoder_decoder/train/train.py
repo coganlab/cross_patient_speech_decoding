@@ -12,7 +12,7 @@ from keras.callbacks import EarlyStopping
 
 
 from processing_utils.sequence_processing import decode_seq2seq
-from .seq2seq_predict_callback import seq2seq_predict_callback
+from .Seq2seqPredictCallback import Seq2seqPredictCallback
 
 
 def shuffle_weights(model, weights=None, layer_idx=None):
@@ -168,8 +168,8 @@ def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
     X_prior_train, X_prior_test = X_prior[train_ind], X_prior[test_ind]
     y_train, y_test = y[train_ind], y[test_ind]
 
-    seq2seq_cb = seq2seq_predict_callback(train_model, inf_enc, inf_dec,
-                                          X_test, y_test)
+    seq2seq_cb = Seq2seqPredictCallback(train_model, inf_enc, inf_dec,
+                                        X_test, y_test)
     if callbacks is not None:
         callbacks.append(seq2seq_cb)
     else:

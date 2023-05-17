@@ -13,11 +13,20 @@ from processing_utils.sequence_processing import (seq2seq_predict_batch,
                                                   one_hot_decode_batch)
 
 
-class seq2seq_predict_callback(keras.callbacks.Callback):
-    def __init__(self, train_model, inf_enc, inf_dec, X, y):
+class Seq2seqPredictCallback(keras.callbacks.Callback):
+    def __init__(self, train_model, inf_enc, inf_dec, X=None, y=None):
         self.train_model = train_model
         self.inf_enc = inf_enc
         self.inf_dec = inf_dec
+        self.X = X
+        self.y = y
+
+    def set_models(self, train_model, inf_enc, inf_dec):
+        self.train_model = train_model
+        self.inf_enc = inf_enc
+        self.inf_dec = inf_dec
+
+    def set_data(self, X, y):
         self.X = X
         self.y = y
 
