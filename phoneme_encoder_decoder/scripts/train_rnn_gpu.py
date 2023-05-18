@@ -105,10 +105,10 @@ def train_rnn():
     bidir = True
 
     # Train model
-    num_folds = 2
-    num_reps = 1
+    num_folds = 5
+    num_reps = 3
     batch_size = 200
-    epochs = 10
+    epochs = 800
     learning_rate = 1e-3
     kfold_rand_state = 7
 
@@ -187,11 +187,11 @@ def train_rnn():
                            + '.pkl'
         else:
             if kfold:
-                acc_filename = DATA_PATH + ('outputs/transfer_'
+                acc_filename = DATA_PATH + ('outputs/'
                                             f'{pt}{norm_ext}_acc_'
                                             f'{num_folds}fold.pkl')
             else:
-                acc_filename = DATA_PATH + ('outputs/transfer_'
+                acc_filename = DATA_PATH + ('outputs/'
                                             f'{pt}{norm_ext}_acc_'
                                             f'{test_size}-heldout.pkl')
 

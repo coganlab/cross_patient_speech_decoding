@@ -132,15 +132,15 @@ def transfer_chain():
     bidir = True
 
     # Train model
-    num_folds = 2  # 5
-    num_reps = 1  # 3
+    num_folds = 5  # 5
+    num_reps = 3  # 3
     batch_size = 200
     learning_rate = 1e-3
     kfold_rand_state = 7
 
-    pre_epochs = 3  # 200
-    conv_epochs = 2  # 60
-    tar_epochs = 5  # 540
+    pre_epochs = 200  # 200
+    conv_epochs = 60  # 60
+    tar_epochs = 540  # 540
     total_epochs = len(chain_X_pre) * (pre_epochs + conv_epochs) + tar_epochs
 
     # TODO modify for multiple pretraining patients
