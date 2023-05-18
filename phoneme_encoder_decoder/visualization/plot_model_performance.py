@@ -73,7 +73,7 @@ def create_CV_history_df(cv_histories, epochs=100):
     return df
 
 
-def plot_tf_hist_loss_acc(history, save_fig=False,
+def plot_tf_hist_acc_loss(history, save_fig=False,
                           save_path="../../figures/loss_accuracy.png"):
     _, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
 
@@ -87,7 +87,8 @@ def plot_tf_hist_loss_acc(history, save_fig=False,
     ax1.legend()
 
     ax2.plot(history.history['accuracy'], color='blue', label='Train')
-    ax2.plot(history.history['val_accuracy'], color='orange', label='Validation')
+    ax2.plot(history.history['val_accuracy'], color='orange',
+             label='Validation')
     ax2.plot(history.history['seq2seq_val_accuracy'], color='red',
              label='Seq2seq Validation')
     ax2.set_xlabel('Epoch')
