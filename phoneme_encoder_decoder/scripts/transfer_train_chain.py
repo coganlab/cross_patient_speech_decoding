@@ -41,7 +41,7 @@ def init_parser():
                         help='Run on cluster (True) or local (False)')
     parser.add_argument('-f', '--filename', type=str, default='',
                         required=False,
-                        help='Output filename for accuracy csv')
+                        help='Output filename for performance saving')
     return parser
 
 
@@ -49,7 +49,7 @@ def str2bool(s):
     return s.lower() == 'true'
 
 
-def transfer_train_rnn():
+def transfer_train_chain():
 
     parser = init_parser()
     args = parser.parse_args()
@@ -93,7 +93,7 @@ def transfer_train_rnn():
                                                         '_goodTrials.mat')
         X = pre_hg_trace  # (n_trials, n_channels, n_timepoints) for 1D CNN
         X_prior, y, _, _ = pad_sequence_teacher_forcing(pre_phon_labels,
-                                                      n_output)
+                                                        n_output)
         chain_X_pre.append(X)
         chain_X_prior_pre.append(X_prior)
         chain_y_pre.append(y)
@@ -105,7 +105,6 @@ def transfer_train_rnn():
                                                     f'{chan_ext}'
                                                     f'{norm_ext}'
                                                     '_goodTrials.mat')
-
 
     chain_X_tar = tar_hg_trace  # (n_trials, n_channels, n_timepoints)
     chain_X_prior_tar, chain_y_tar, _, _ = pad_sequence_teacher_forcing(
@@ -134,14 +133,13 @@ def transfer_train_rnn():
 
     pre_epochs = 200  # 200
     conv_epochs = 60  # 60
-    tar_epochs = 540  # 540  
+    tar_epochs = 540  # 540
     total_epochs = len(chain_X_pre) * (pre_epochs + conv_epochs) + tar_epochs
 
     for i in range(n_iter):
         print('==============================================================')
         print('Iteration: ', i+1)
         print('==============================================================')
-
 
         train_model, inf_enc, inf_dec = model_fcn(n_input_time,
                                                   n_input_channel_pre,
@@ -154,7 +152,7 @@ def transfer_train_rnn():
         train_model.compile(optimizer=Adam(learning_rate),
                             loss='categorical_crossentropy',
                             metrics=['accuracy'])
-        
+
         k_hist, y_pred_all, y_test_all = transfer_chain_kfold(
                                             train_model, inf_enc, inf_dec,
                                             chain_X_pre, chain_X_prior_pre,
@@ -181,16 +179,16 @@ def transfer_train_rnn():
             acc_filename = DATA_PATH + ('outputs/transfer_'
                                         f'[{"-".join(pretrain_list)}]'
                                         f'-{target_pt}'
-                                        f'{norm_ext}_acc_kfold.pkl')
-        
+                                        f'{norm_ext}_acc_{num_folds}fold.pkl')
+
         # save performance
         append_pkl_accs(acc_filename, val_acc, cmat)
         plot_accuracy_loss(k_hist, epochs=total_epochs, save_fig=True,
-                            save_path=DATA_PATH +
-                            (f'outputs/plots/transfer_'
-                             f'[{"-".join(pretrain_list)}]-'
-                             f'{target_pt}_kfold_train_{i+1}.png'))
+                           save_path=DATA_PATH +
+                           (f'outputs/plots/transfer_'
+                            f'[{"-".join(pretrain_list)}]-'
+                            f'{target_pt}_{num_folds}fold_train_{i+1}.png'))
 
 
 if __name__ == '__main__':
-    transfer_train_rnn()
+    transfer_train_chain()
