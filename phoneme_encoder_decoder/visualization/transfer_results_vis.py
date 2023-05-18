@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
 
-from plot_model_performance import create_CV_history_df
+from .plot_model_performance import create_CV_history_df
 
 
 def combine_transfer_single(transfer_data, single_data):
@@ -154,9 +154,10 @@ def plot_transfer_loss_acc(t_hist, pre_epochs, conv_epochs, tar_epochs,
         pt_labels = [f"Pretrain {i+1}" for i in range(n_pre)]
         pt_labels.append("Target")
 
-    transfer_df = create_CV_history_df(t_hist, epochs=(pre_epochs + conv_epochs
-                                                       + tar_epochs))
-    f, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+    total_epochs = n_pre * (pre_epochs + conv_epochs) + tar_epochs
+
+    transfer_df = create_CV_history_df(t_hist, epochs=total_epochs)
+    _, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     sns.lineplot(data=transfer_df, x='epoch', y='loss', ax=ax1, color='blue',
                  label='Train')
     sns.lineplot(data=transfer_df, x='epoch', y='val_loss', ax=ax1,
@@ -178,17 +179,23 @@ def plot_transfer_loss_acc(t_hist, pre_epochs, conv_epochs, tar_epochs,
 
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel('Loss')
-    ax1.set_title('RNN Loss')
+    # ax1.set_title('RNN Loss', y=1.0, pad=30)
     ax1.legend()
 
     ax2.set_xlabel('Epoch')
     ax2.set_ylabel('Accuracy')
-    ax2.set_title('RNN Accuracy')
+    # ax2.set_title('RNN Accuracy', y=1.0, pad=30)
     ax2.legend()
+
+    if save_fig:
+        plt.savefig(save_path)
+
+    plt.show()
 
 
 def annotate_transfer_stage(axs, curr_pre_num, pt_labels, pre_epochs,
                             conv_epochs, tar_epochs, stage_color='black'):
+    annot_y = 1.01
     for ax in axs:
         conv_x = 0
         if curr_pre_num != 0:  # no conv stage for first patient
@@ -199,14 +206,18 @@ def annotate_transfer_stage(axs, curr_pre_num, pt_labels, pre_epochs,
             trans = ax.get_xaxis_transform()
             annot_conv_x = conv_x - conv_epochs/2
             ax.annotate(f'{pt_labels[curr_pre_num]}\nConv',
-                        xy=(annot_conv_x, 1.05), xycoords=trans, ha='center',
-                        fontsize=12)
+                        xy=(annot_conv_x, annot_y), xycoords=trans,
+                        ha='center', fontsize=12)
 
         # full train annotation
-        pre_x = curr_pre_num*conv_epochs + (curr_pre_num+1)*pre_epochs
-        ax.axvline(x=pre_x, color=stage_color, linestyle='--')
-        # x in data untis, y in axes fraction
         trans = ax.get_xaxis_transform()
-        ax.annotate(f'{pt_labels[curr_pre_num]}\nFull',
-                    xy=((pre_x + conv_x)/2, 1.05), xycoords=trans, ha='center',
-                    fontsize=12)
+        if curr_pre_num == len(pt_labels) - 1:  # target annotation
+            ax.annotate(f'{pt_labels[curr_pre_num]}\nFull',
+                        xy=((2*conv_x + tar_epochs)/2, annot_y),
+                        xycoords=trans, ha='center', fontsize=12)
+        else:
+            pre_x = curr_pre_num*conv_epochs + (curr_pre_num+1)*pre_epochs
+            ax.axvline(x=pre_x, color=stage_color, linestyle='--')
+            ax.annotate(f'{pt_labels[curr_pre_num]}\nFull',
+                        xy=((pre_x + conv_x)/2, annot_y), xycoords=trans,
+                        ha='center', fontsize=12)
