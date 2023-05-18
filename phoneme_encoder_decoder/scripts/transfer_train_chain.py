@@ -18,7 +18,7 @@ from processing_utils.data_saving import append_pkl_accs
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                        stacked_gru_1Dcnn_model)
 from train.transfer_training import transfer_chain_kfold, transfer_train_chain
-from visualization.plot_model_performance import plot_accuracy_loss
+from visualization.transfer_results_vis import plot_transfer_loss_acc
 
 
 def init_parser():
@@ -143,7 +143,6 @@ def transfer_chain():
     tar_epochs = 540  # 540
     total_epochs = len(chain_X_pre) * (pre_epochs + conv_epochs) + tar_epochs
 
-    # TODO modify for multiple pretraining patients
     if not kfold:
         # Hold out test data set
         test_size = 0.2
@@ -206,12 +205,15 @@ def transfer_chain():
             cmat = confusion_matrix(y_test_all, y_pred_all,
                                     labels=range(1, n_output))
 
-            plot_accuracy_loss(k_hist, epochs=total_epochs, save_fig=True,
-                               save_path=DATA_PATH +
-                               (f'outputs/plots/transfer_'
-                                f'[{"-".join(pretrain_list)}]-'
-                                f'{target_pt}_'
-                                f'{num_folds}fold_train_{i+1}.png'))
+            plot_transfer_loss_acc(k_hist, pre_epochs, conv_epochs,
+                                   tar_epochs, len(chain_X_pre),
+                                   pretrain_list+[target_pt],
+                                   save_fig=True,
+                                   save_path=DATA_PATH +
+                                   (f'outputs/plots/transfer_'
+                                    f'[{"-".join(pretrain_list)}]-'
+                                    f'{target_pt}_'
+                                    f'{num_folds}fold_train_{i+1}.png'))
 
         else:
             train_model, inf_enc, _ = transfer_train_chain(

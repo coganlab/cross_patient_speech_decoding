@@ -5,6 +5,9 @@ Plotting functions for viewing results of transfer learning experiments.
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+import seaborn as sns
+
+from .plot_model_performance import create_CV_history_df
 
 
 def combine_transfer_single(transfer_data, single_data):
@@ -141,3 +144,80 @@ def annotate_heatmap(im, data=None, valfmt="{x:.2f}",
             texts.append(text)
 
     return texts
+
+
+def plot_transfer_loss_acc(t_hist, pre_epochs, conv_epochs, tar_epochs,
+                           n_pre, pt_labels=None,
+                           save_fig=False,
+                           save_path="../../figures/loss_acc.png"):
+    if pt_labels is None:
+        pt_labels = [f"Pretrain {i+1}" for i in range(n_pre)]
+        pt_labels.append("Target")
+
+    total_epochs = n_pre * (pre_epochs + conv_epochs) + tar_epochs
+
+    transfer_df = create_CV_history_df(t_hist, epochs=total_epochs)
+    _, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+    sns.lineplot(data=transfer_df, x='epoch', y='loss', ax=ax1, color='blue',
+                 label='Train')
+    sns.lineplot(data=transfer_df, x='epoch', y='val_loss', ax=ax1,
+                 color='orange', label='Validation')
+    sns.lineplot(data=transfer_df, x='epoch', y='seq2seq_val_loss', ax=ax1,
+                 color='red', label='Seq2seq Validation')
+
+    sns.lineplot(data=transfer_df, x='epoch', y='accuracy', ax=ax2,
+                 color='blue', label='Train')
+    sns.lineplot(data=transfer_df, x='epoch', y='val_accuracy', ax=ax2,
+                 color='orange', label='Validation')
+    sns.lineplot(data=transfer_df, x='epoch', y='seq2seq_val_accuracy',
+                 ax=ax2, color='red', label='Seq2seq Validation')
+
+    # pretraining annotations
+    for i in range(n_pre + 1):
+        annotate_transfer_stage((ax1, ax2), i, pt_labels, pre_epochs,
+                                conv_epochs, tar_epochs)
+
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    # ax1.set_title('RNN Loss', y=1.0, pad=30)
+    ax1.legend()
+
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('Accuracy')
+    # ax2.set_title('RNN Accuracy', y=1.0, pad=30)
+    ax2.legend()
+
+    if save_fig:
+        plt.savefig(save_path)
+
+    plt.show()
+
+
+def annotate_transfer_stage(axs, curr_pre_num, pt_labels, pre_epochs,
+                            conv_epochs, tar_epochs, stage_color='black'):
+    annot_y = 1.01
+    for ax in axs:
+        conv_x = 0
+        if curr_pre_num != 0:  # no conv stage for first patient
+            # conv annotation
+            conv_x = curr_pre_num*(conv_epochs + pre_epochs)
+            ax.axvline(x=conv_x, color=stage_color, linestyle='--')
+            # x in data untis, y in axes fraction
+            trans = ax.get_xaxis_transform()
+            annot_conv_x = conv_x - conv_epochs/2
+            ax.annotate(f'{pt_labels[curr_pre_num]}\nConv',
+                        xy=(annot_conv_x, annot_y), xycoords=trans,
+                        ha='center', fontsize=12)
+
+        # full train annotation
+        trans = ax.get_xaxis_transform()
+        if curr_pre_num == len(pt_labels) - 1:  # target annotation
+            ax.annotate(f'{pt_labels[curr_pre_num]}\nFull',
+                        xy=((2*conv_x + tar_epochs)/2, annot_y),
+                        xycoords=trans, ha='center', fontsize=12)
+        else:
+            pre_x = curr_pre_num*conv_epochs + (curr_pre_num+1)*pre_epochs
+            ax.axvline(x=pre_x, color=stage_color, linestyle='--')
+            ax.annotate(f'{pt_labels[curr_pre_num]}\nFull',
+                        xy=((pre_x + conv_x)/2, annot_y), xycoords=trans,
+                        ha='center', fontsize=12)
