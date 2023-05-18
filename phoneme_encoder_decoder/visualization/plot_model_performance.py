@@ -73,7 +73,7 @@ def create_CV_history_df(cv_histories, epochs=100):
     return df
 
 
-def plot_tf_hist_acc_loss(history, save_fig=False,
+def plot_tf_hist_loss_acc(history, save_fig=False,
                           save_path="../../figures/loss_accuracy.png"):
     _, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
 
@@ -102,10 +102,10 @@ def plot_tf_hist_acc_loss(history, save_fig=False,
     plt.show()
 
 
-def plot_accuracy_loss(cv_histories, epochs=100, save_fig=False,
-                       save_path="../../figures/loss_accuracy.png"):
+def plot_loss_acc(cv_histories, epochs=100, save_fig=False,
+                  save_path="../../figures/loss_accuracy.png"):
     train_loss_df = create_CV_history_df(cv_histories, epochs=epochs)
-    _, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+    f, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     sns.lineplot(data=train_loss_df, x='epoch', y='loss', ax=ax1, color='blue',
                  label='Train')
     sns.lineplot(data=train_loss_df, x='epoch', y='val_loss', ax=ax1,
