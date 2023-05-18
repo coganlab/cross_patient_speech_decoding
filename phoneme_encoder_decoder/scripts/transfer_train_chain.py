@@ -7,15 +7,17 @@ import sys
 import argparse
 from keras.optimizers import Adam
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
+from sklearn.model_selection import ShuffleSplit
 
 sys.path.insert(0, '..')
 
 from processing_utils.feature_data_from_mat import get_high_gamma_data
-from processing_utils.sequence_processing import pad_sequence_teacher_forcing
+from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
+                                                  decode_seq2seq)
 from processing_utils.data_saving import append_pkl_accs
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                        stacked_gru_1Dcnn_model)
-from train.transfer_training import transfer_chain_kfold
+from train.transfer_training import transfer_chain_kfold, transfer_train_chain
 from visualization.plot_model_performance import plot_accuracy_loss
 
 
@@ -34,6 +36,9 @@ def init_parser():
                         'or mean-subtracted normalization (False)')
     parser.add_argument('-n', '--num_iter', type=int, default=5,
                         required=False, help='Number of times to run model')
+    parser.add_argument('-k', '--k_fold', type=str, default='True',
+                        required=False, help='Evaluation via k-fold (True) or'
+                        'held-out test set (False)')
     parser.add_argument('-v', '--verbose', type=int, default=1,
                         required=False, help='Verbosity of model training')
     parser.add_argument('-c', '--cluster', type=str, default='True',
@@ -49,7 +54,7 @@ def str2bool(s):
     return s.lower() == 'true'
 
 
-def transfer_train_chain():
+def transfer_chain():
 
     parser = init_parser()
     args = parser.parse_args()
@@ -63,6 +68,7 @@ def transfer_train_chain():
     chan_ext = '_sigChannel' if str2bool(inputs['sig_channels']) else '_all'
     norm_ext = '_zscore' if str2bool(inputs['z_score']) else ''
     n_iter = inputs['num_iter']
+    kfold = str2bool(inputs['k_fold'])
     verbose = inputs['verbose']
     cluster = str2bool(inputs['cluster'])
 
@@ -126,16 +132,41 @@ def transfer_train_chain():
     bidir = True
 
     # Train model
-    num_folds = 5  # 5
-    num_reps = 3  # 3
+    num_folds = 2  # 5
+    num_reps = 1  # 3
     batch_size = 200
     learning_rate = 1e-3
     kfold_rand_state = 7
 
-    pre_epochs = 200  # 200
-    conv_epochs = 60  # 60
-    tar_epochs = 540  # 540
+    pre_epochs = 3  # 200
+    conv_epochs = 2  # 60
+    tar_epochs = 5  # 540
     total_epochs = len(chain_X_pre) * (pre_epochs + conv_epochs) + tar_epochs
+
+    # TODO modify for multiple pretraining patients
+    if not kfold:
+        # Hold out test data set
+        test_size = 0.2
+        data_split = ShuffleSplit(n_splits=1, test_size=test_size,
+                                  random_state=2)
+        pre_splits = [data_split.split(x) for x in chain_X_pre]
+        pre_inds = [next(s) for s in pre_splits]
+        train_idx_pre, test_idx_pre = zip(*pre_inds)
+        X_train_pre, X_test_pre = (
+            [x[train_idx_pre[i]] for i, x in enumerate(chain_X_pre)],
+            [x[test_idx_pre[i]] for i, x in enumerate(chain_X_pre)])
+        X_prior_train_pre, X_prior_test_pre = (
+            [xp[train_idx_pre[i]] for i, xp in enumerate(chain_X_prior_pre)],
+            [xp[test_idx_pre[i]] for i, xp in enumerate(chain_X_prior_pre)])
+        y_train_pre, y_test_pre = (
+            [y[train_idx_pre[i]] for i, y in enumerate(chain_y_pre)],
+            [y[test_idx_pre[i]] for i, y in enumerate(chain_y_pre)])
+
+        train_idx, test_idx = next(data_split.split(chain_X_tar))
+        X_train_tar, X_test_tar = chain_X_tar[train_idx], chain_X_tar[test_idx]
+        X_prior_train_tar, X_prior_test_tar = (chain_X_prior_tar[train_idx],
+                                               chain_X_prior_tar[test_idx])
+        y_train_tar, y_test_tar = chain_y_tar[train_idx], chain_y_tar[test_idx]
 
     for i in range(n_iter):
         print('==============================================================')
@@ -154,43 +185,74 @@ def transfer_train_chain():
                             loss='categorical_crossentropy',
                             metrics=['accuracy'])
 
-        k_hist, y_pred_all, y_test_all = transfer_chain_kfold(
+        if kfold:
+            k_hist, y_pred_all, y_test_all = transfer_chain_kfold(
+                                                train_model, inf_enc, inf_dec,
+                                                chain_X_pre, chain_X_prior_pre,
+                                                chain_y_pre, chain_X_tar,
+                                                chain_X_prior_tar,
+                                                chain_y_tar,
+                                                num_folds=num_folds,
+                                                num_reps=num_reps,
+                                                rand_state=kfold_rand_state,
+                                                pretrain_epochs=pre_epochs,
+                                                conv_epochs=conv_epochs,
+                                                target_epochs=tar_epochs,
+                                                batch_size=batch_size,
+                                                verbose=verbose)
+
+            # final val acc - preds from inf decoder across all folds
+            acc = balanced_accuracy_score(y_test_all, y_pred_all)
+            cmat = confusion_matrix(y_test_all, y_pred_all,
+                                    labels=range(1, n_output))
+
+            plot_accuracy_loss(k_hist, epochs=total_epochs, save_fig=True,
+                               save_path=DATA_PATH +
+                               (f'outputs/plots/transfer_'
+                                f'[{"-".join(pretrain_list)}]-'
+                                f'{target_pt}_'
+                                f'{num_folds}fold_train_{i+1}.png'))
+
+        else:
+            train_model, inf_enc, _ = transfer_train_chain(
                                             train_model, inf_enc, inf_dec,
-                                            chain_X_pre, chain_X_prior_pre,
-                                            chain_y_pre, chain_X_tar,
-                                            chain_X_prior_tar,
-                                            chain_y_tar,
-                                            num_folds=num_folds,
-                                            num_reps=num_reps,
-                                            rand_state=kfold_rand_state,
-                                            batch_size=batch_size,
+                                            X_train_pre, X_prior_train_pre,
+                                            y_train_pre, X_train_tar,
+                                            X_prior_train_tar, y_train_tar,
                                             pretrain_epochs=pre_epochs,
                                             conv_epochs=conv_epochs,
                                             target_epochs=tar_epochs,
+                                            batch_size=batch_size,
                                             verbose=verbose)
 
-        # final val acc - preds from inf decoder across all folds
-        val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
-        cmat = confusion_matrix(y_test_all, y_pred_all,
-                                labels=range(1, n_output))
+            # test acc
+            y_pred_test, labels_test = decode_seq2seq(inf_enc, inf_dec,
+                                                      X_test_tar, y_test_tar)
+            acc = balanced_accuracy_score(labels_test, y_pred_test)
+            cmat = confusion_matrix(labels_test, y_pred_test,
+                                    labels=range(1, n_output))
 
         if inputs['filename'] != '':
             acc_filename = DATA_PATH + 'outputs/' + inputs['filename'] \
                            + '.pkl'
         else:
-            acc_filename = DATA_PATH + ('outputs/transfer_'
-                                        f'[{"-".join(pretrain_list)}]'
-                                        f'-{target_pt}'
-                                        f'{norm_ext}_acc_{num_folds}fold.pkl')
+            if kfold:
+                acc_filename = DATA_PATH + ('outputs/transfer_'
+                                            f'[{"-".join(pretrain_list)}]'
+                                            f'-{target_pt}'
+                                            f'{norm_ext}_acc_'
+                                            f'{num_folds}fold.pkl')
+            else:
+                acc_filename = DATA_PATH + ('outputs/transfer_'
+                                            f'[{"-".join(pretrain_list)}]'
+                                            f'-{target_pt}'
+                                            f'{norm_ext}_acc_'
+                                            f'{test_size}-heldout.pkl')
 
         # save performance
-        append_pkl_accs(acc_filename, val_acc, cmat)
-        plot_accuracy_loss(k_hist, epochs=total_epochs, save_fig=True,
-                           save_path=DATA_PATH +
-                           (f'outputs/plots/transfer_'
-                            f'[{"-".join(pretrain_list)}]-'
-                            f'{target_pt}_{num_folds}fold_train_{i+1}.png'))
+        append_pkl_accs(acc_filename, acc, cmat, acc_key='val_acc' if kfold
+                        else 'test_acc')
 
 
 if __name__ == '__main__':
-    transfer_train_chain()
+    transfer_chain()

@@ -7,15 +7,17 @@ import sys
 import argparse
 from keras.optimizers import Adam
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
+from sklearn.model_selection import ShuffleSplit
 
 sys.path.insert(0, '..')
 
 from processing_utils.feature_data_from_mat import get_high_gamma_data
-from processing_utils.sequence_processing import pad_sequence_teacher_forcing
+from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
+                                                  decode_seq2seq)
 from processing_utils.data_saving import append_pkl_accs
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                        stacked_gru_1Dcnn_model)
-from train.train import train_seq2seq_kfold
+from train.train import train_seq2seq_kfold, train_seq2seq
 from visualization.plot_model_performance import plot_accuracy_loss
 
 
@@ -31,6 +33,9 @@ def init_parser():
                         'or mean-subtracted normalization (False)')
     parser.add_argument('-n', '--num_iter', type=int, default=5,
                         required=False, help='Number of times to run model')
+    parser.add_argument('-k', '--k_fold', type=str, default='True',
+                        required=False, help='Evaluation via k-fold (True) or'
+                        'held-out test set (False)')
     parser.add_argument('-v', '--verbose', type=int, default=1,
                         required=False, help='Verbosity of model training')
     parser.add_argument('-c', '--cluster', type=str, default='True',
@@ -58,6 +63,7 @@ def train_rnn():
     chan_ext = '_sigChannel' if str2bool(inputs['sig_channels']) else '_all'
     norm_ext = '_zscore' if str2bool(inputs['z_score']) else ''
     n_iter = inputs['num_iter']
+    kfold = str2bool(inputs['k_fold'])
     verbose = inputs['verbose']
     cluster = str2bool(inputs['cluster'])
 
@@ -99,12 +105,26 @@ def train_rnn():
     bidir = True
 
     # Train model
-    num_folds = 5
-    num_reps = 3
+    num_folds = 2
+    num_reps = 1
     batch_size = 200
-    epochs = 800
+    epochs = 10
     learning_rate = 1e-3
     kfold_rand_state = 7
+
+    if not kfold:
+        # Hold out test data set
+        test_size = 0.2
+        data_split = ShuffleSplit(n_splits=1, test_size=test_size,
+                                  random_state=2)
+        train_idx, test_idx = next(data_split.split(X))
+        X_train, X_test = X[train_idx], X[test_idx]
+        X_prior_train, X_prior_test = X_prior[train_idx], X_prior[test_idx]
+        y_train, y_test = y[train_idx], y[test_idx]
+    else:
+        X_train = X
+        X_prior_train = X_prior
+        y_train = y
 
     for i in range(n_iter):
         print('==============================================================')
@@ -126,10 +146,11 @@ def train_rnn():
                             loss='categorical_crossentropy',
                             metrics=['accuracy'])
 
-        k_hist, y_pred_all, y_test_all = train_seq2seq_kfold(
+        if kfold:
+            k_hist, y_pred_all, y_test_all = train_seq2seq_kfold(
                                                 train_model, inf_enc,
-                                                inf_dec, X,
-                                                X_prior, y,
+                                                inf_dec, X_train,
+                                                X_prior_train, y_train,
                                                 num_folds=num_folds,
                                                 num_reps=num_reps,
                                                 rand_state=kfold_rand_state,
@@ -138,25 +159,45 @@ def train_rnn():
                                                 early_stop=False,
                                                 verbose=verbose)
 
-        # final val acc - preds from inf decoder across all folds
-        val_acc = balanced_accuracy_score(y_test_all, y_pred_all)
-        cmat = confusion_matrix(y_test_all, y_pred_all,
-                                labels=range(1, n_output))
+            # final val acc - preds from inf decoder across all folds
+            acc = balanced_accuracy_score(y_test_all, y_pred_all)
+            cmat = confusion_matrix(y_test_all, y_pred_all,
+                                    labels=range(1, n_output))
+
+            plot_accuracy_loss(k_hist, epochs=epochs, save_fig=True,
+                               save_path=DATA_PATH +
+                               (f'outputs/plots/{pt}'
+                                f'_{num_folds}fold_train_{i+1}.png'))
+        else:
+            _, _ = train_seq2seq(train_model, X_train,
+                                 X_prior_train, y_train,
+                                 batch_size=batch_size,
+                                 epochs=epochs,
+                                 verbose=verbose)
+
+            # test acc
+            y_pred_test, labels_test = decode_seq2seq(inf_enc, inf_dec, X_test,
+                                                      y_test)
+            acc = balanced_accuracy_score(labels_test, y_pred_test)
+            cmat = confusion_matrix(labels_test, y_pred_test,
+                                    labels=range(1, n_output))
 
         if inputs['filename'] != '':
             acc_filename = DATA_PATH + 'outputs/' + inputs['filename'] \
                            + '.pkl'
         else:
-            acc_filename = DATA_PATH + ('outputs/transfer_'
-                                        f'{pt}{norm_ext}_acc_'
-                                        f'{num_folds}fold.pkl')
+            if kfold:
+                acc_filename = DATA_PATH + ('outputs/transfer_'
+                                            f'{pt}{norm_ext}_acc_'
+                                            f'{num_folds}fold.pkl')
+            else:
+                acc_filename = DATA_PATH + ('outputs/transfer_'
+                                            f'{pt}{norm_ext}_acc_'
+                                            f'{test_size}-heldout.pkl')
 
         # save performance
-        append_pkl_accs(acc_filename, val_acc, cmat)
-        plot_accuracy_loss(k_hist, epochs=epochs, save_fig=True,
-                           save_path=DATA_PATH +
-                           (f'outputs/plots/{pt}'
-                               f'_{num_folds}fold_train_{i+1}.png'))
+        append_pkl_accs(acc_filename, acc, cmat, acc_key='val_acc' if kfold
+                        else 'test_acc')
 
 
 if __name__ == '__main__':
