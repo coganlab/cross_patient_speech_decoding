@@ -17,7 +17,7 @@ from .Seq2seqPredictCallback import Seq2seqPredictCallback
 
 def transfer_seq2seq_kfold(train_model, inf_enc, inf_dec, X1, X1_prior, y1,
                            X2, X2_prior, y2, num_folds=10, num_reps=3,
-                           **kwargs):
+                           rand_state=None, **kwargs):
     # save initial weights to reset model for each fold
     init_train_w = train_model.get_weights()
 
@@ -25,7 +25,7 @@ def transfer_seq2seq_kfold(train_model, inf_enc, inf_dec, X1, X1_prior, y1,
     seq_len = y2.shape[1]  # length of output sequence
 
     # define k-fold cross validation
-    cv = KFold(n_splits=num_folds, shuffle=True)
+    cv = KFold(n_splits=num_folds, shuffle=True, random_state=rand_state)
 
     # dictionary for tracking history of each fold
     histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
@@ -133,13 +133,14 @@ def transfer_train_seq2seq(X1, X1_prior, y1, X2_train, X2_prior_train,
 def transfer_seq2seq_kfold_diff_chans(train_model, pre_enc, pre_dec,
                                       tar_model, tar_enc, tar_dec,
                                       X1, X1_prior, y1, X2, X2_prior, y2,
-                                      num_folds=10, num_reps=3, **kwargs):
+                                      num_folds=10, num_reps=3,
+                                      rand_state=None, **kwargs):
     # save initial weights to reset model for each fold
     init_train_w = train_model.get_weights()
     init_tar_w = tar_model.get_weights()
 
     # define k-fold cross validation
-    cv = KFold(n_splits=num_folds, shuffle=True)
+    cv = KFold(n_splits=num_folds, shuffle=True, random_state=rand_state)
     splits_1 = cv.split(X1)
     splits_2 = cv.split(X2)
 
@@ -295,7 +296,8 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
 
 
 def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
-                         X2_prior, y2, num_folds=10, num_reps=3, **kwargs):
+                         X2_prior, y2, num_folds=10, num_reps=3,
+                         rand_state=None, **kwargs):
     # save initial weights to reset model for each fold
     init_train_w = model.get_weights()
 
@@ -303,7 +305,7 @@ def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
     X1, X1_prior, y1 = multi_pt_compat(X1, X1_prior, y1)
 
     # define k-fold cross validation
-    cv = KFold(n_splits=num_folds, shuffle=True)
+    cv = KFold(n_splits=num_folds, shuffle=True, random_state=rand_state)
     pre_splits = [cv.split(x) for x in X1]
     tar_splits = cv.split(X2)
 
