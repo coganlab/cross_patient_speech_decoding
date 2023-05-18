@@ -4,7 +4,6 @@ Script to train a RNN model on the DCC.
 
 import os
 import sys
-import csv
 import argparse
 from keras.optimizers import Adam
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
