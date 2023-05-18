@@ -130,6 +130,7 @@ def transfer_train_chain():
     num_reps = 3  # 3
     batch_size = 200
     learning_rate = 1e-3
+    kfold_rand_state = 7
 
     pre_epochs = 200  # 200
     conv_epochs = 60  # 60
@@ -161,6 +162,7 @@ def transfer_train_chain():
                                             chain_y_tar,
                                             num_folds=num_folds,
                                             num_reps=num_reps,
+                                            rand_state=kfold_rand_state,
                                             batch_size=batch_size,
                                             pretrain_epochs=pre_epochs,
                                             conv_epochs=conv_epochs,

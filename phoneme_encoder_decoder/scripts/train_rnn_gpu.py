@@ -104,6 +104,7 @@ def train_rnn():
     batch_size = 200
     epochs = 800
     learning_rate = 1e-3
+    kfold_rand_state = 7
 
     for i in range(n_iter):
         print('==============================================================')
@@ -131,6 +132,7 @@ def train_rnn():
                                                 X_prior, y,
                                                 num_folds=num_folds,
                                                 num_reps=num_reps,
+                                                rand_state=kfold_rand_state,
                                                 batch_size=batch_size,
                                                 epochs=epochs,
                                                 early_stop=False,
