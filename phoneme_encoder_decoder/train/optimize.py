@@ -99,9 +99,12 @@ class encDecTransferTuner(kt.Tuner):
         hp = trial.hyperparameters
 
         # optimize stage epochs as percents of reg epochs or absolute values?
-        pre_epochs = hp.Int('epochs', min_value=50, max_value=300, step=50)
-        conv_epochs = hp.Int('epochs', min_value=50, max_value=200, step=50)
-        tar_epochs = hp.Int('epochs', min_value=100, max_value=800, step=100)
+        pre_epochs = hp.Int('pretrain_epochs', min_value=50, max_value=300,
+                            step=50)
+        conv_epochs = hp.Int('conv_epochs', min_value=50, max_value=200,
+                             step=50)
+        tar_epochs = hp.Int('target_epochs', min_value=100, max_value=800,
+                            step=100)
         # epochs = 800
 
         # create model with hyperparameter space
