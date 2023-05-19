@@ -304,24 +304,26 @@ def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
     # put data in list format if not (likely not list if only single pt)
     X1, X1_prior, y1 = multi_pt_compat(X1, X1_prior, y1)
 
-    # define k-fold cross validation
-    cv = KFold(n_splits=num_folds, shuffle=True, random_state=rand_state)
-    pre_splits = [cv.split(x) for x in X1]
-    tar_splits = cv.split(X2)
-
     # dictionary for tracking history of each fold
     histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
                  'val_loss': []}
 
-    # cv training
+    # define k-fold cross validation
+    cv = KFold(n_splits=num_folds, shuffle=True, random_state=rand_state)
+
     y_pred_all, y_test_all = [], []
-    for f in range(num_folds):
-        pre_inds = [next(s) for s in pre_splits]
-        train_ind_pre, test_ind_pre = zip(*pre_inds)  # unpack pretrain list
-        train_ind_tar, test_ind_tar = next(tar_splits)  # single target pt
-        fold = f + 1
-        print(f'===== Fold {fold} =====')
-        for _ in range(num_reps):  # repeat fold for stability
+    for r in range(num_reps):  # repeat fold for stability
+        print(f'======== Repetition {r + 1} ========')
+
+        # cv training
+        pre_splits = [cv.split(x) for x in X1]
+        tar_splits = cv.split(X2)
+        for f in range(num_folds):
+            print(f'===== Fold {f + 1} =====')
+
+            pre_inds = [next(s) for s in pre_splits]
+            train_ind_pre, test_ind_pre = zip(*pre_inds)  # unpack pre list
+            train_ind_tar, test_ind_tar = next(tar_splits)  # single target pt
 
             # reset model weights for current fold (also resets associated
             # inference weights)
