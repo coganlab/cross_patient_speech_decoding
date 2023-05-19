@@ -71,8 +71,8 @@ def hyperparam_optim():
     print("Optimizing hyperparameters for patient %s." % pt)
     print("Getting data from %s." % (DATA_PATH + f'{pt}/'))
     print("Saving outputs to %s." % (DATA_PATH + ('rnn_tuning/'
-                                                   f'{pt}_1Dcnn_EncDec_'
-                                                   f'{oracle_type}/')))
+                                                  f'{pt}_1Dcnn_EncDec_'
+                                                  f'{oracle_type}/')))
     print('==================================================================')
 
     # Load in data from workspace mat files
@@ -121,7 +121,8 @@ def hyperparam_optim():
     rnn_optimizer = encDecTuner(hypermodel=hyper_model, oracle=oracle,
                                 directory=DATA_PATH + tuning_dir,
                                 project_name=project_dir)
-    # rnn_optimizer.search(X_train, X_prior_train, y_train, epochs=tuning_epochs)
+    # rnn_optimizer.search(X_train, X_prior_train, y_train,
+    #                      epochs=tuning_epochs)
     rnn_optimizer.search(X_train, X_prior_train, y_train)
 
     # save trial data to text file
