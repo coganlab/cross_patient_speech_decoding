@@ -15,6 +15,7 @@ sys.path.insert(0, '..')
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                        stacked_gru_1Dcnn_model)
 from train.train import train_seq2seq_kfold
+from train.transfer_training import transfer_chain_kfold
 
 
 class encDecHyperModel(kt.HyperModel):
@@ -65,9 +66,12 @@ class encDecHyperModel(kt.HyperModel):
     def fit(self, model, *args, **kwargs):
         return train_seq2seq_kfold(model, *args, verbose=0, **kwargs)
 
+    def fit_transfer(self, model, *args, **kwargs):
+        return transfer_chain_kfold(model, *args, verbose=0, **kwargs)
+
 
 class encDecTuner(kt.Tuner):
-    def run_trial(self, trial, X, X_prior, y, *args, **kwargs):
+    def run_trial(self, trial, X, X_prior, y, **kwargs):
         hp = trial.hyperparameters
         batch_size = X.shape[0]
 
@@ -79,9 +83,38 @@ class encDecTuner(kt.Tuner):
 
         # train model over hyperparemters
         _, y_pred, y_test = self.hypermodel.fit(model, inf_enc, inf_dec,
-                                                X, X_prior, y, *args,
+                                                X, X_prior, y,
                                                 batch_size=batch_size,
                                                 epochs=epochs,
+                                                **kwargs)
+        # evaluate through validation accuracy
+        val_accuracy = balanced_accuracy_score(y_test, y_pred)
+        self.oracle.update_trial(trial.trial_id,
+                                 {'seq2seq_val_accuracy': val_accuracy})
+
+
+class encDecTransferTuner(kt.Tuner):
+    def run_trial(self, trial, X_pre, X_prior_pre, y_pre, X_tar, X_prior_tar,
+                  y_tar, **kwargs):
+        hp = trial.hyperparameters
+
+        # optimize stage epochs as percents of reg epochs or absolute values?
+        pre_epochs = hp.Int('epochs', min_value=50, max_value=300, step=50)
+        conv_epochs = hp.Int('epochs', min_value=50, max_value=200, step=50)
+        tar_epochs = hp.Int('epochs', min_value=100, max_value=800, step=100)
+        # epochs = 800
+
+        # create model with hyperparameter space
+        model, inf_enc, inf_dec = self.hypermodel.build(hp)
+
+        # train model over hyperparemters
+        _, y_pred, y_test = self.hypermodel.fit_transfer(
+                                                model, inf_enc, inf_dec, X_pre,
+                                                X_prior_pre, y_pre, X_tar,
+                                                X_prior_tar, y_tar,
+                                                pretrain_epochs=pre_epochs,
+                                                conv_epochs=conv_epochs,
+                                                target_epochs=tar_epochs,
                                                 **kwargs)
         # evaluate through validation accuracy
         val_accuracy = balanced_accuracy_score(y_test, y_pred)
