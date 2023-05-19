@@ -30,7 +30,7 @@ def init_parser():
                         'or mean-subtracted normalization (False)')
     parser.add_argument('-v', '--verbose', type=int, default=1,
                         required=False, help='Verbosity of model training')
-    parser.add_argument('-or', '--oracle', type=str, default='random',
+    parser.add_argument('-o', '--oracle', type=str, default='random',
                         required=False, help='Random search (random) or '
                         'Bayesian optimization (bayesian)')
     parser.add_argument('-c', '--cluster', type=str, default='True',
