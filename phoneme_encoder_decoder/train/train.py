@@ -113,12 +113,14 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
     # dictionary for history of each fold
     histories = {'accuracy': [], 'loss': []}
 
-    # cv training
     y_pred_all, y_test_all = [], []
-    for train_ind, test_ind in cv.split(X):
-        fold = int((len(histories["accuracy"]) / num_reps) + 1)
-        print(f'===== Fold {fold} =====')
-        for _ in range(num_reps):  # repeat fold for stability
+    for r in range(num_reps):  # repeat fold for stability
+        print(f'======== Repetition {r + 1} ========')
+
+        # cv training
+        for f, (train_ind, test_ind) in enumerate(cv.split(X)):
+            print(f'===== Fold {f + 1} =====')
+
             # reset model weights for current fold (also resets associated
             # inference weights)
             shuffle_weights(train_model, weights=init_train_w)

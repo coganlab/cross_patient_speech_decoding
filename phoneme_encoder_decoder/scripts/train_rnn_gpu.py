@@ -18,7 +18,7 @@ from processing_utils.data_saving import append_pkl_accs
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                        stacked_gru_1Dcnn_model)
 from train.train import train_seq2seq_kfold, train_seq2seq
-from visualization.plot_model_performance import plot_accuracy_loss
+from visualization.plot_model_performance import plot_loss_acc
 
 
 def init_parser():
@@ -164,10 +164,10 @@ def train_rnn():
             cmat = confusion_matrix(y_test_all, y_pred_all,
                                     labels=range(1, n_output))
 
-            plot_accuracy_loss(k_hist, epochs=epochs, save_fig=True,
-                               save_path=DATA_PATH +
-                               (f'outputs/plots/{pt}'
-                                f'_{num_folds}fold_train_{i+1}.png'))
+            plot_loss_acc(k_hist, epochs=epochs, save_fig=True,
+                          save_path=DATA_PATH +
+                          (f'outputs/plots/{pt}'
+                           f'_{num_folds}fold_train_{i+1}.png'))
         else:
             _, _ = train_seq2seq(train_model, X_train,
                                  X_prior_train, y_train,
