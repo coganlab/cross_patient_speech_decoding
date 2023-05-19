@@ -101,7 +101,7 @@ def hyperparam_optim():
     bidir = True
 
     # keras tuner optimization
-    max_optim_trials = 200
+    max_optim_trials = 400
     tuning_dir = 'rnn_tuning'
     project_dir = f'{pt}_1Dcnn_EncDec_train_params_{oracle_type}'
     # tuning_epochs = 800
@@ -126,7 +126,7 @@ def hyperparam_optim():
 
     # save trial data to text file
     summary_path = DATA_PATH + tuning_dir + '/' + project_dir +\
-        '/optim_summary.txt'
+        f'/optim_summary_{max_optim_trials}.txt'
     with open(summary_path, 'w+') as f:
         with redirect_stdout(f):
             rnn_optimizer.results_summary(num_trials=50)
