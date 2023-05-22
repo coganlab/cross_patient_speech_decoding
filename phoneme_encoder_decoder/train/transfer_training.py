@@ -297,7 +297,7 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
 
 def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                          X2_prior, y2, num_folds=10, num_reps=3,
-                         rand_state=None, **kwargs):
+                         pre_split=False, rand_state=None, **kwargs):
     # save initial weights to reset model for each fold
     init_train_w = model.get_weights()
 
@@ -316,13 +316,18 @@ def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
         print(f'======== Repetition {r + 1} ========')
 
         # cv training
-        pre_splits = [cv.split(x) for x in X1]
+        if pre_split:
+            pre_splits = [cv.split(x) for x in X1]
+            train_ind_pre, test_ind_pre = None
+        else:
+            pre_splits = None
         tar_splits = cv.split(X2)
         for f in range(num_folds):
             print(f'===== Fold {f + 1} =====')
 
-            pre_inds = [next(s) for s in pre_splits]
-            train_ind_pre, test_ind_pre = zip(*pre_inds)  # unpack pre list
+            if pre_split:
+                pre_inds = [next(s) for s in pre_splits]
+                train_ind_pre, test_ind_pre = zip(*pre_inds)  # unpack pre list
             train_ind_tar, test_ind_tar = next(tar_splits)  # single target pt
 
             # reset model weights for current fold (also resets associated
@@ -348,27 +353,31 @@ def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
 def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
                                X1_prior, y1, X2, X2_prior, y2,
                                train_ind_pre, test_ind_pre, train_ind_tar,
-                               test_ind_tar, **kwargs):
+                               test_ind_tar, pre_split=False, **kwargs):
 
     # split pretrain data into train and test (may be list with multi pt data)
-    X1_train, X1_test = ([x[train_ind_pre[i]] for i, x in enumerate(X1)],
-                         [x[test_ind_pre[i]] for i, x in enumerate(X1)])
-    X1_prior_train, X1_prior_test = ([xp[train_ind_pre[i]] for i, xp in
-                                      enumerate(X1_prior)],
-                                     [xp[test_ind_pre[i]] for i, xp in
-                                      enumerate(X1_prior)])
-    y1_train, y1_test = ([y[train_ind_pre[i]] for i, y in enumerate(y1)],
-                         [y[test_ind_pre[i]] for i, y in enumerate(y1)])
+    if pre_split:
+        X1_train, X1_test = ([x[train_ind_pre[i]] for i, x in enumerate(X1)],
+                             [x[test_ind_pre[i]] for i, x in enumerate(X1)])
+        X1_prior_train, X1_prior_test = ([xp[train_ind_pre[i]] for i, xp in
+                                          enumerate(X1_prior)],
+                                         [xp[test_ind_pre[i]] for i, xp in
+                                          enumerate(X1_prior)])
+        y1_train, y1_test = ([y[train_ind_pre[i]] for i, y in enumerate(y1)],
+                             [y[test_ind_pre[i]] for i, y in enumerate(y1)])
+        pre_val = ([([x, xp], y) for (x, xp, y) in
+                    zip(X1_test, X1_prior_test, y1_test)])
+    else:  # Use all pretrain data for each target fold
+        X1_train = X1
+        X1_prior_train = X1_prior
+        y1_train = y1
+        pre_val = None
 
     # split target data into train and test
     X2_train, X2_test = X2[train_ind_tar], X2[test_ind_tar]
     X2_prior_train, X2_prior_test = (X2_prior[train_ind_tar],
                                      X2_prior[test_ind_tar])
     y2_train, y2_test = y2[train_ind_tar], y2[test_ind_tar]
-
-    # define validation data (preserve list format for multi pt pretrain data)
-    pre_val = ([([x, xp], y) for (x, xp, y) in
-                zip(X1_test, X1_prior_test, y1_test)])
     tar_val = ([X2_test, X2_prior_test], y2_test)
 
     model, inf_enc, transfer_hist = transfer_train_chain(
