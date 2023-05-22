@@ -110,11 +110,11 @@ def freeze_train_driver():
     bidir = True
 
     # Train model
-    num_folds = 2
-    num_reps = 1
+    num_folds = 5
+    num_reps = 3
     batch_size = 200
-    conv_epochs = 3
-    full_epochs = 5
+    conv_epochs = 60
+    full_epochs = 540
     learning_rate = 1e-3
     kfold_rand_state = 7
 
