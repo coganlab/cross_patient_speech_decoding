@@ -605,7 +605,10 @@ def concat_hists(hist_list):
     # extend base histories with histories from other training sessions
     for hist in hist_list[1:]:
         for key in hist.history.keys():
-            new_hist.history[key].extend(hist.history[key])
+            if key in new_hist.history.keys():
+                new_hist.history[key].extend(hist.history[key])
+            else:
+                new_hist.history[key] = hist.history[key]
 
     return new_hist
 
