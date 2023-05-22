@@ -2,6 +2,7 @@
 Plotting functions for viewing results of transfer learning experiments.
 """
 
+import itertools
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -222,3 +223,34 @@ def annotate_transfer_stage(axs, curr_pre_num, pt_labels, pre_epochs,
             ax.annotate(f'{pt_labels[curr_pre_num]}\nFull',
                         xy=((pre_x + conv_x)/2, annot_y), xycoords=trans,
                         ha='center', fontsize=12)
+
+
+def multi_pt_box_plot(reg_train, single_pre, double_pre, triple_pre, labels,
+                      pt_id, save_fig=False,
+                      save_path='../../figures/%s_multi_pt_transfer.png'):
+    # set x positions to provide separation between transfer results with
+    # different number of pretraining patients
+    pt_amounts = np.cumsum([len(reg_train), len(single_pre), len(double_pre),
+                            len(triple_pre)])
+    x_pos = list(itertools.chain(list(range(1, pt_amounts[0]+1)),
+                                 list(range(pt_amounts[0]+2,
+                                            pt_amounts[1]+2)),
+                                 list(range(pt_amounts[1]+3,
+                                            pt_amounts[2]+3)),
+                                 list(range(pt_amounts[2]+4,
+                                            pt_amounts[3]+4))))
+    data = [*reg_train, *single_pre, *double_pre, *triple_pre]
+
+    plt.figure(figsize=(20, 8))
+    plt.boxplot(data, positions=x_pos)
+    plt.xticks(x_pos, labels)
+    plt.axhline(y=np.median(reg_train), color='r', linestyle='--')
+    # plt.xlim([-0.75, len(bar_data) - 0.25])
+    plt.ylabel('Decoding Accuracy (%)')
+    plt.ylim(bottom=0)
+    plt.title(f'{pt_id} Mulit-Patient Decoding Accuracy')
+
+    if save_fig:
+        plt.savefig(save_path % pt_id)
+
+    plt.show()
