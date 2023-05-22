@@ -157,6 +157,7 @@ def plot_transfer_loss_acc(t_hist, pre_epochs, conv_epochs, tar_epochs,
     total_epochs = n_pre * (pre_epochs + conv_epochs) + tar_epochs
 
     transfer_df = create_CV_history_df(t_hist, epochs=total_epochs)
+    transfer_df = transfer_df.astype(float)
     _, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     sns.lineplot(data=transfer_df, x='epoch', y='loss', ax=ax1, color='blue',
                  label='Train')
