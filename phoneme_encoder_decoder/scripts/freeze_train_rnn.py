@@ -20,7 +20,7 @@ from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
 from processing_utils.data_saving import append_pkl_accs
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                        stacked_gru_1Dcnn_model)
-from train.train import train_seq2seq, shuffle_weights
+from train.train import train_seq2seq, shuffle_weights, track_model_history
 from train.transfer_training import transfer_conv_update, concat_hists
 from train.Seq2seqPredictCallback import Seq2seqPredictCallback
 from visualization.plot_model_performance import plot_loss_acc
@@ -110,11 +110,11 @@ def freeze_train_driver():
     bidir = True
 
     # Train model
-    num_folds = 5
-    num_reps = 3
+    num_folds = 2
+    num_reps = 1
     batch_size = 200
-    conv_epochs = 60
-    full_epochs = 540
+    conv_epochs = 3
+    full_epochs = 5
     learning_rate = 1e-3
     kfold_rand_state = 7
 
@@ -169,7 +169,7 @@ def freeze_train_driver():
             cmat = confusion_matrix(y_test_all, y_pred_all,
                                     labels=range(1, n_output))
 
-            plot_loss_acc(k_hist, epochs=conv_epochs + full_epochs,
+            plot_loss_acc(k_hist, epochs=conv_epochs+full_epochs,
                           save_fig=True,
                           save_path=DATA_PATH +
                           (f'outputs/plots/{pt}'
@@ -220,7 +220,8 @@ def freeze_train_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
     cv = KFold(n_splits=num_folds, shuffle=True, random_state=rand_state)
 
     # dictionary for history of each fold
-    histories = {'accuracy': [], 'loss': []}
+    histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
+                 'val_loss': []}
 
     y_pred_all, y_test_all = [], []
     for r in range(num_reps):  # repeat fold for stability
@@ -263,7 +264,8 @@ def freeze_train_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
             y_pred_all.extend(y_pred_fold)
             y_test_all.extend(y_test_fold)
 
-            concat_hists([conv_hist, full_hist])
+            total_hist = concat_hists([conv_hist, full_hist])
+            track_model_history(histories, total_hist)  # track history in-place
 
     return histories, np.array(y_pred_all), np.array(y_test_all)
 
