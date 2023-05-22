@@ -318,9 +318,9 @@ def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
         # cv training
         if pre_split:
             pre_splits = [cv.split(x) for x in X1]
-            train_ind_pre, test_ind_pre = None
         else:
             pre_splits = None
+            train_ind_pre, test_ind_pre = None, None
         tar_splits = cv.split(X2)
         for f in range(num_folds):
             print(f'===== Fold {f + 1} =====')
@@ -339,7 +339,8 @@ def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                                            inf_dec, X1, X1_prior, y1,
                                            X2, X2_prior, y2, train_ind_pre,
                                            test_ind_pre, train_ind_tar,
-                                           test_ind_tar, **kwargs)
+                                           test_ind_tar, pre_split=pre_split,
+                                           **kwargs)
 
             # track history in-place
             track_model_history(histories, transfer_hist)
@@ -438,14 +439,15 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
     """
     # parse pre-train input to check for multiple pts
     X1, X1_prior, y1 = multi_pt_compat(X1, X1_prior, y1)
-    pre_val = val_data_to_list(pre_val)
 
     # check if val data is provided
-    do_val = pre_val is not None and tar_val is not None
+    do_val_pre = pre_val is not None
+    do_val_tar = tar_val is not None
     cb = None
 
     # define callback to calculate seq2seq metrics during training
-    if do_val:
+    if do_val_pre:
+        pre_val = val_data_to_list(pre_val)  # fix val data format if needed
         # val data for first pretrain patient - feature data and labels
         X1_test, y1_test = pre_val[0][0][0], pre_val[0][1]
         seq2seq_cb = Seq2seqPredictCallback(model, inf_enc, inf_dec, X1_test,
@@ -456,7 +458,7 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
     _, pretrain_hist = train_seq2seq(
                             model, X1[0], X1_prior[0], y1[0],
                             epochs=pretrain_epochs,
-                            validation_data=pre_val[0] if do_val else None,
+                            validation_data=pre_val[0] if do_val_pre else None,
                             callbacks=cb,
                             **kwargs)
 
@@ -470,7 +472,7 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                                     enc_dec_idx=enc_dec_idx)
 
         # make sure seq2seq_cb is using current pretrain pt models and data
-        if do_val:
+        if do_val_pre:
             X1_test, y1_test = pre_val[i][0][0], pre_val[i][1]
             seq2seq_cb.set_models(model, inf_enc, inf_dec)
             seq2seq_cb.set_data(X1_test, y1_test)
@@ -481,14 +483,14 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                             model, X1[i], X1_prior[i], y1[i],
                             enc_dec_idx=enc_dec_idx,
                             epochs=conv_epochs,
-                            validation_data=pre_val[i] if do_val else None,
+                            validation_data=pre_val[i] if do_val_pre else None,
                             callbacks=cb,
                             **kwargs)
         # pretraining on current pretrain pt
         _, pretrain_hist = train_seq2seq(
                             model, X1[i], X1_prior[i], y1[i],
                             epochs=pretrain_epochs,
-                            validation_data=pre_val[i] if do_val else None,
+                            validation_data=pre_val[i] if do_val_pre else None,
                             callbacks=cb,
                             **kwargs)
         curr_hist = concat_hists([curr_hist, conv_hist, pretrain_hist])
@@ -501,9 +503,13 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                                     enc_dec_idx=enc_dec_idx)
 
     # make sure seq2seq_cb is using target pt models and data
-    if do_val:
+    if do_val_tar:
+        if not do_val_pre:  # make callback if not already made for pretrain
+            seq2seq_cb = Seq2seqPredictCallback(model, inf_enc, inf_dec)
+        else:  # otherwise update to current models
+            seq2seq_cb.set_models(model, inf_enc, inf_dec)
+
         X2_test, y2_test = tar_val[0][0], tar_val[1]
-        seq2seq_cb.set_models(model, inf_enc, inf_dec)
         seq2seq_cb.set_data(X2_test, y2_test)
         cb = [seq2seq_cb]
 
