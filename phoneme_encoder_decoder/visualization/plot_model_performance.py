@@ -8,6 +8,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
+def to_extend_on_end(histories):
+    if len(np.ravel(histories['loss'])) > len(np.ravel(histories['val_loss'])):
+        return False
+    return True
+
+
 def extend_list_to_length(lst, length):
     """Extends a list to a specified length by repeating the last element.
     Raises error if list is already longer than specified length.
@@ -26,6 +32,15 @@ def extend_list_to_length(lst, length):
     return lst
 
 
+def pad_list_to_length(lst, length):
+    if len(lst) > length:
+        raise ValueError("List length is greater than specified length.")
+    else:
+        tmp = ([None]*(length-len(lst)))
+        tmp.extend(lst)
+    return tmp
+
+
 def extend_history_lists(histories, epochs=100):
     """Extends model history lists to a specified length by repeating the last
     element. Use to ensure all folds have the same number of epochs when number
@@ -41,10 +56,15 @@ def extend_history_lists(histories, epochs=100):
     """
     history_copy = histories.copy()
 
+    extend_on_end = to_extend_on_end(histories)
+
     # extend histories to specified length
     for key in histories.keys():
         for fold in range(len(histories[key])):
-            ext_list = extend_list_to_length(histories[key][fold], epochs)
+            if extend_on_end:
+                ext_list = extend_list_to_length(histories[key][fold], epochs)
+            else:
+                ext_list = pad_list_to_length(histories[key][fold], epochs)
             history_copy[key][fold] = ext_list
     return history_copy
 
@@ -105,6 +125,7 @@ def plot_tf_hist_loss_acc(history, save_fig=False,
 def plot_loss_acc(cv_histories, epochs=100, save_fig=False,
                   save_path="../../figures/loss_accuracy.png"):
     train_loss_df = create_CV_history_df(cv_histories, epochs=epochs)
+    train_loss_df = train_loss_df.astype(float)
     f, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     sns.lineplot(data=train_loss_df, x='epoch', y='loss', ax=ax1, color='blue',
                  label='Train')

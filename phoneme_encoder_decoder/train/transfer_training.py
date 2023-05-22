@@ -297,7 +297,7 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
 
 def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                          X2_prior, y2, num_folds=10, num_reps=3,
-                         rand_state=None, **kwargs):
+                         pre_split=False, rand_state=None, **kwargs):
     # save initial weights to reset model for each fold
     init_train_w = model.get_weights()
 
@@ -316,13 +316,18 @@ def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
         print(f'======== Repetition {r + 1} ========')
 
         # cv training
-        pre_splits = [cv.split(x) for x in X1]
+        if pre_split:
+            pre_splits = [cv.split(x) for x in X1]
+        else:
+            pre_splits = None
+            train_ind_pre, test_ind_pre = None, None
         tar_splits = cv.split(X2)
         for f in range(num_folds):
             print(f'===== Fold {f + 1} =====')
 
-            pre_inds = [next(s) for s in pre_splits]
-            train_ind_pre, test_ind_pre = zip(*pre_inds)  # unpack pre list
+            if pre_split:
+                pre_inds = [next(s) for s in pre_splits]
+                train_ind_pre, test_ind_pre = zip(*pre_inds)  # unpack pre list
             train_ind_tar, test_ind_tar = next(tar_splits)  # single target pt
 
             # reset model weights for current fold (also resets associated
@@ -334,7 +339,8 @@ def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                                            inf_dec, X1, X1_prior, y1,
                                            X2, X2_prior, y2, train_ind_pre,
                                            test_ind_pre, train_ind_tar,
-                                           test_ind_tar, **kwargs)
+                                           test_ind_tar, pre_split=pre_split,
+                                           **kwargs)
 
             # track history in-place
             track_model_history(histories, transfer_hist)
@@ -348,27 +354,31 @@ def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
 def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
                                X1_prior, y1, X2, X2_prior, y2,
                                train_ind_pre, test_ind_pre, train_ind_tar,
-                               test_ind_tar, **kwargs):
+                               test_ind_tar, pre_split=False, **kwargs):
 
     # split pretrain data into train and test (may be list with multi pt data)
-    X1_train, X1_test = ([x[train_ind_pre[i]] for i, x in enumerate(X1)],
-                         [x[test_ind_pre[i]] for i, x in enumerate(X1)])
-    X1_prior_train, X1_prior_test = ([xp[train_ind_pre[i]] for i, xp in
-                                      enumerate(X1_prior)],
-                                     [xp[test_ind_pre[i]] for i, xp in
-                                      enumerate(X1_prior)])
-    y1_train, y1_test = ([y[train_ind_pre[i]] for i, y in enumerate(y1)],
-                         [y[test_ind_pre[i]] for i, y in enumerate(y1)])
+    if pre_split:
+        X1_train, X1_test = ([x[train_ind_pre[i]] for i, x in enumerate(X1)],
+                             [x[test_ind_pre[i]] for i, x in enumerate(X1)])
+        X1_prior_train, X1_prior_test = ([xp[train_ind_pre[i]] for i, xp in
+                                          enumerate(X1_prior)],
+                                         [xp[test_ind_pre[i]] for i, xp in
+                                          enumerate(X1_prior)])
+        y1_train, y1_test = ([y[train_ind_pre[i]] for i, y in enumerate(y1)],
+                             [y[test_ind_pre[i]] for i, y in enumerate(y1)])
+        pre_val = ([([x, xp], y) for (x, xp, y) in
+                    zip(X1_test, X1_prior_test, y1_test)])
+    else:  # Use all pretrain data for each target fold
+        X1_train = X1
+        X1_prior_train = X1_prior
+        y1_train = y1
+        pre_val = None
 
     # split target data into train and test
     X2_train, X2_test = X2[train_ind_tar], X2[test_ind_tar]
     X2_prior_train, X2_prior_test = (X2_prior[train_ind_tar],
                                      X2_prior[test_ind_tar])
     y2_train, y2_test = y2[train_ind_tar], y2[test_ind_tar]
-
-    # define validation data (preserve list format for multi pt pretrain data)
-    pre_val = ([([x, xp], y) for (x, xp, y) in
-                zip(X1_test, X1_prior_test, y1_test)])
     tar_val = ([X2_test, X2_prior_test], y2_test)
 
     model, inf_enc, transfer_hist = transfer_train_chain(
@@ -429,14 +439,15 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
     """
     # parse pre-train input to check for multiple pts
     X1, X1_prior, y1 = multi_pt_compat(X1, X1_prior, y1)
-    pre_val = val_data_to_list(pre_val)
 
     # check if val data is provided
-    do_val = pre_val is not None and tar_val is not None
+    do_val_pre = pre_val is not None
+    do_val_tar = tar_val is not None
     cb = None
 
     # define callback to calculate seq2seq metrics during training
-    if do_val:
+    if do_val_pre:
+        pre_val = val_data_to_list(pre_val)  # fix val data format if needed
         # val data for first pretrain patient - feature data and labels
         X1_test, y1_test = pre_val[0][0][0], pre_val[0][1]
         seq2seq_cb = Seq2seqPredictCallback(model, inf_enc, inf_dec, X1_test,
@@ -447,7 +458,7 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
     _, pretrain_hist = train_seq2seq(
                             model, X1[0], X1_prior[0], y1[0],
                             epochs=pretrain_epochs,
-                            validation_data=pre_val[0] if do_val else None,
+                            validation_data=pre_val[0] if do_val_pre else None,
                             callbacks=cb,
                             **kwargs)
 
@@ -461,7 +472,7 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                                     enc_dec_idx=enc_dec_idx)
 
         # make sure seq2seq_cb is using current pretrain pt models and data
-        if do_val:
+        if do_val_pre:
             X1_test, y1_test = pre_val[i][0][0], pre_val[i][1]
             seq2seq_cb.set_models(model, inf_enc, inf_dec)
             seq2seq_cb.set_data(X1_test, y1_test)
@@ -472,14 +483,14 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                             model, X1[i], X1_prior[i], y1[i],
                             enc_dec_idx=enc_dec_idx,
                             epochs=conv_epochs,
-                            validation_data=pre_val[i] if do_val else None,
+                            validation_data=pre_val[i] if do_val_pre else None,
                             callbacks=cb,
                             **kwargs)
         # pretraining on current pretrain pt
         _, pretrain_hist = train_seq2seq(
                             model, X1[i], X1_prior[i], y1[i],
                             epochs=pretrain_epochs,
-                            validation_data=pre_val[i] if do_val else None,
+                            validation_data=pre_val[i] if do_val_pre else None,
                             callbacks=cb,
                             **kwargs)
         curr_hist = concat_hists([curr_hist, conv_hist, pretrain_hist])
@@ -492,9 +503,13 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                                     enc_dec_idx=enc_dec_idx)
 
     # make sure seq2seq_cb is using target pt models and data
-    if do_val:
+    if do_val_tar:
+        if not do_val_pre:  # make callback if not already made for pretrain
+            seq2seq_cb = Seq2seqPredictCallback(model, inf_enc, inf_dec)
+        else:  # otherwise update to current models
+            seq2seq_cb.set_models(model, inf_enc, inf_dec)
+
         X2_test, y2_test = tar_val[0][0], tar_val[1]
-        seq2seq_cb.set_models(model, inf_enc, inf_dec)
         seq2seq_cb.set_data(X2_test, y2_test)
         cb = [seq2seq_cb]
 
@@ -590,7 +605,10 @@ def concat_hists(hist_list):
     # extend base histories with histories from other training sessions
     for hist in hist_list[1:]:
         for key in hist.history.keys():
-            new_hist.history[key].extend(hist.history[key])
+            if key in new_hist.history.keys():
+                new_hist.history[key].extend(hist.history[key])
+            else:
+                new_hist.history[key] = hist.history[key]
 
     return new_hist
 
