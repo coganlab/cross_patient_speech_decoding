@@ -226,7 +226,7 @@ def annotate_transfer_stage(axs, curr_pre_num, pt_labels, pre_epochs,
 
 
 def multi_pt_box_plot(reg_train, single_pre, double_pre, triple_pre, labels,
-                      pt_id, save_fig=False,
+                      pt_id, freeze_data=None, save_fig=False,
                       save_path='../../figures/%s_multi_pt_transfer.png'):
     # set x positions to provide separation between transfer results with
     # different number of pretraining patients
@@ -244,7 +244,9 @@ def multi_pt_box_plot(reg_train, single_pre, double_pre, triple_pre, labels,
     plt.figure(figsize=(20, 8))
     plt.boxplot(data, positions=x_pos)
     plt.xticks(x_pos, labels)
-    plt.axhline(y=np.median(reg_train), color='r', linestyle='--')
+    plt.axhline(y=np.median(reg_train[0]), color='r', linestyle='--')
+    if freeze_data is not None:
+        plt.axhline(y=np.median(freeze_data), color='b', linestyle='--')
     # plt.xlim([-0.75, len(bar_data) - 0.25])
     plt.ylabel('Decoding Accuracy (%)')
     plt.ylim(bottom=0)
