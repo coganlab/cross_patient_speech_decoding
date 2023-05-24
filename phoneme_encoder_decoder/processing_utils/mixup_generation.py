@@ -8,7 +8,7 @@ import numpy as np
 from collections import defaultdict
 
 
-def generate_mixup(x, y, labels):
+def generate_mixup(x, prior, y, labels, alpha=0.2):
     """Generates synthetic data on batch via MixUp algorithm.
 
     Creates synthetic data from linear combinations of observations/trials
@@ -26,24 +26,29 @@ def generate_mixup(x, y, labels):
     """
 
     # get indices of duplicate observations/trials
-    _, dup_inds = list_duplicates(labels)
+    dup_gen = list_duplicates(labels)
 
     # generate synthetic data for each non-duplicate observation/trial
-    x_mixed, y_mixed = [], []
-    for inds in dup_inds:  # iterate over sequences with multiple trials
-        trial_gen = trial_order_generator(inds)
+    x_mixed, prior_mixed, y_mixed = [], [], []
+    for (_, dup_inds) in dup_gen:  # use sequences with multiple trials
+        trial_gen = trial_order_generator(np.array(dup_inds))
         for (ind1, ind2) in trial_gen:  # iterate over trial combinations
-            x_mixed.append(mixup_data(x[ind1], x[ind2]))
-            y_mixed.append(mixup_data(y[ind1], y[ind2]))
+            mix_x, mix_prior, mix_y = mixup_data(x[ind1], x[ind2], prior[ind1],
+                                                 prior[ind2], y[ind1], y[ind2],
+                                                 alpha=alpha)
+            x_mixed.append(mix_x)
+            prior_mixed.append(mix_prior)
+            y_mixed.append(mix_y)
 
     # add original data to synthetic data
     x_mixed = np.concatenate((x, np.array(x_mixed)))
+    prior_mixed = np.concatenate((prior, np.array(prior_mixed)))
     y_mixed = np.concatenate((y, np.array(y_mixed)))
 
-    return x_mixed, y_mixed
+    return x_mixed, prior_mixed, y_mixed
 
 
-def mixup_data(x, y, alpha=0.2):
+def mixup_data(x1, x2, prior1, prior2, y1, y2, alpha=0.2):
     """MixUp algorithm for data augmentation. Applies MixUp to a single
     observation/trial.
 
@@ -55,17 +60,15 @@ def mixup_data(x, y, alpha=0.2):
     Returns:
         (ndarray, ndarray): Mixed feature data and mixed label data.
     """
-    # get number of features
-    n_features = x.shape[0]
-
     # get beta distribution parameters
     lam = np.random.beta(alpha, alpha)
 
     # apply MixUp
-    x_mixed = lam * x + (1 - lam) * x[::-1]
-    y_mixed = lam * y + (1 - lam) * y[::-1]
+    x_mixed = lam * x1 + (1 - lam) * x2
+    prior_mixed = lam * prior1 + (1 - lam) * prior2
+    y_mixed = lam * y1 + (1 - lam) * y2
 
-    return x_mixed, y_mixed
+    return x_mixed, prior_mixed, y_mixed
 
 
 def trial_order_generator(inds):
@@ -108,5 +111,5 @@ def list_duplicates(seq):
     """
     tally = defaultdict(list)
     for i, item in enumerate(seq):
-        tally[item].append(i)
+        tally[np.array2string(item)].append(i)
     return ((key, locs) for key, locs in tally.items() if len(locs) > 1)
