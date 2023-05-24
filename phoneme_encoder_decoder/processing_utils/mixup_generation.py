@@ -40,11 +40,13 @@ def generate_mixup(x, prior, y, labels, alpha=1):
             prior_mixed.append(mix_prior)
             y_mixed.append(mix_y)
 
+    if not len(x_mixed):  # no duplicates, so no mixup data
+        return x, prior, y
+
     # add original data to synthetic data
     x_mixed = np.concatenate((x, np.array(x_mixed)))
     prior_mixed = np.concatenate((prior, np.array(prior_mixed)))
     y_mixed = np.concatenate((y, np.array(y_mixed)))
-
     return x_mixed, prior_mixed, y_mixed
 
 
