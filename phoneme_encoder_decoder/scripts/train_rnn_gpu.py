@@ -15,6 +15,7 @@ from processing_utils.feature_data_from_mat import get_high_gamma_data
 from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
                                                   decode_seq2seq)
 from processing_utils.data_saving import append_pkl_accs
+from processing_utils.mixup_generation import generate_mixup
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                        stacked_gru_1Dcnn_model)
 from train.train import train_seq2seq_kfold, train_seq2seq
@@ -44,6 +45,10 @@ def init_parser():
     parser.add_argument('-f', '--filename', type=str, default='',
                         required=False,
                         help='Output filename for performance saving')
+    parser.add_argument('-m', '--mixup', type=str, default='False',
+                        required=False,
+                        help='Generate synthetic trial data via MixUp (True)'
+                             'or use only original data (False)')
     return parser
 
 
@@ -66,6 +71,8 @@ def train_rnn():
     kfold = str2bool(inputs['k_fold'])
     verbose = inputs['verbose']
     cluster = str2bool(inputs['cluster'])
+    mixup = str2bool(inputs['mixup'])
+    mixup_ext = '_mixup' if mixup else ''
 
     if cluster:
         HOME_PATH = os.path.expanduser('~')
@@ -88,7 +95,8 @@ def train_rnn():
                                                         '_goodTrials.mat')
 
     X = hg_trace  # use HG traces (n_trials, n_channels, n_timepoints) for CNN
-    X_prior, y, _, _ = pad_sequence_teacher_forcing(phon_labels, n_output)
+    X_prior, y, _, seq_labels = pad_sequence_teacher_forcing(phon_labels,
+                                                             n_output)
 
     # Build models
     n_input_time = X.shape[1]
@@ -103,6 +111,7 @@ def train_rnn():
     reg_lambda = 1e-6  # S14=1e-6, S26=1e-5
     dropout = 0.33  # 0.33
     bidir = True
+    mixup_alpha = 5 if mixup else None
 
     # Train model
     num_folds = 5
@@ -121,10 +130,20 @@ def train_rnn():
         X_train, X_test = X[train_idx], X[test_idx]
         X_prior_train, X_prior_test = X_prior[train_idx], X_prior[test_idx]
         y_train, y_test = y[train_idx], y[test_idx]
+        seq_labels_train, seq_labels_test = (seq_labels[train_idx],
+                                             seq_labels[test_idx])
+
+        if mixup:
+            X_train, X_prior_train, y_train = generate_mixup(
+                                                X_train, X_prior_train,
+                                                y_train, seq_labels_train,
+                                                alpha=mixup_alpha)
+
     else:
         X_train = X
         X_prior_train = X_prior
         y_train = y
+        seq_labels_train = seq_labels
 
     for i in range(n_iter):
         print('==============================================================')
@@ -154,6 +173,8 @@ def train_rnn():
                                                 num_folds=num_folds,
                                                 num_reps=num_reps,
                                                 rand_state=kfold_rand_state,
+                                                mixup_alpha=mixup_alpha,
+                                                mixup_labels=seq_labels_train,
                                                 batch_size=batch_size,
                                                 epochs=epochs,
                                                 early_stop=False,
@@ -167,7 +188,7 @@ def train_rnn():
             plot_loss_acc(k_hist, epochs=epochs, save_fig=True,
                           save_path=DATA_PATH +
                           (f'outputs/plots/{pt}'
-                           f'_{num_folds}fold_train_{i+1}.png'))
+                           f'_{num_folds}fold_train{mixup_ext}_{i+1}.png'))
         else:
             _, _ = train_seq2seq(train_model, X_train,
                                  X_prior_train, y_train,
@@ -189,11 +210,12 @@ def train_rnn():
             if kfold:
                 acc_filename = DATA_PATH + ('outputs/'
                                             f'{pt}{norm_ext}_acc_'
-                                            f'{num_folds}fold.pkl')
+                                            f'{num_folds}fold{mixup_ext}.pkl')
             else:
                 acc_filename = DATA_PATH + ('outputs/'
                                             f'{pt}{norm_ext}_acc_'
-                                            f'{test_size}-heldout.pkl')
+                                            f'{test_size}-heldout{mixup_ext}'
+                                            '.pkl')
 
         # save performance
         append_pkl_accs(acc_filename, acc, cmat, acc_key='val_acc' if kfold
