@@ -31,3 +31,22 @@ def mixup_data(x, y, alpha=0.2):
     y_mixed = lam * y + (1 - lam) * y[::-1]
 
     return x_mixed, y_mixed
+
+
+def list_duplicates(seq):
+    """Gets indices of duplicate items in a list.
+
+    From https://stackoverflow.com/questions/5419204/index-of-duplicates-items
+    -in-a-python-list
+    Author: PaulMcG
+
+    Args:
+        seq (array-like): Sequence to be searched for duplicates.
+
+    Returns:
+        (Array-like type, list): Identity of duplicate items and their indices.
+    """
+    tally = defaultdict(list)
+    for i, item in enumerate(seq):
+        tally[item].append(i)
+    return ((key, locs) for key, locs in tally.items() if len(locs) > 1)
