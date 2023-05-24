@@ -72,6 +72,7 @@ def train_rnn():
     verbose = inputs['verbose']
     cluster = str2bool(inputs['cluster'])
     mixup = str2bool(inputs['mixup'])
+    mixup_ext = '_mixup' if mixup else ''
 
     if cluster:
         HOME_PATH = os.path.expanduser('~')
@@ -142,6 +143,7 @@ def train_rnn():
         X_train = X
         X_prior_train = X_prior
         y_train = y
+        seq_labels_train = seq_labels
 
     for i in range(n_iter):
         print('==============================================================')
@@ -172,6 +174,7 @@ def train_rnn():
                                                 num_reps=num_reps,
                                                 rand_state=kfold_rand_state,
                                                 mixup_alpha=mixup_alpha,
+                                                mixup_labels=seq_labels_train,
                                                 batch_size=batch_size,
                                                 epochs=epochs,
                                                 early_stop=False,
@@ -185,7 +188,7 @@ def train_rnn():
             plot_loss_acc(k_hist, epochs=epochs, save_fig=True,
                           save_path=DATA_PATH +
                           (f'outputs/plots/{pt}'
-                           f'_{num_folds}fold_train_{i+1}.png'))
+                           f'_{num_folds}fold_train{mixup_ext}_{i+1}.png'))
         else:
             _, _ = train_seq2seq(train_model, X_train,
                                  X_prior_train, y_train,
@@ -207,11 +210,12 @@ def train_rnn():
             if kfold:
                 acc_filename = DATA_PATH + ('outputs/'
                                             f'{pt}{norm_ext}_acc_'
-                                            f'{num_folds}fold.pkl')
+                                            f'{num_folds}fold{mixup_ext}.pkl')
             else:
                 acc_filename = DATA_PATH + ('outputs/'
                                             f'{pt}{norm_ext}_acc_'
-                                            f'{test_size}-heldout.pkl')
+                                            f'{test_size}-heldout{mixup_ext}'
+                                            '.pkl')
 
         # save performance
         append_pkl_accs(acc_filename, acc, cmat, acc_key='val_acc' if kfold

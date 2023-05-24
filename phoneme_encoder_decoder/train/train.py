@@ -55,7 +55,7 @@ def shuffle_weights(model, weights=None, layer_idx=None):
 def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
                         num_folds=10, num_reps=3, batch_size=200, epochs=800,
                         early_stop=False, rand_state=None,
-                        mixup_alpha=None, **kwargs):
+                        mixup_alpha=None, mixup_labels=None, **kwargs):
     """Trains a seq2seq encoder-decoder model using k-fold cross validation.
 
     Uses k-fold cross validation to train a seq2seq encoder-decoder
