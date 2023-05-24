@@ -12,6 +12,7 @@ from keras.callbacks import EarlyStopping
 
 
 from processing_utils.sequence_processing import decode_seq2seq
+from processing_utils.mixup_generation import generate_mixup
 from .Seq2seqPredictCallback import Seq2seqPredictCallback
 
 
@@ -53,7 +54,8 @@ def shuffle_weights(model, weights=None, layer_idx=None):
 
 def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
                         num_folds=10, num_reps=3, batch_size=200, epochs=800,
-                        early_stop=False, rand_state=None, **kwargs):
+                        early_stop=False, rand_state=None,
+                        mixup_alpha=None, **kwargs):
     """Trains a seq2seq encoder-decoder model using k-fold cross validation.
 
     Uses k-fold cross validation to train a seq2seq encoder-decoder
@@ -129,7 +131,9 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
                                         train_model, inf_enc, inf_dec, X,
                                         X_prior, y, train_ind, test_ind,
                                         batch_size=batch_size, epochs=epochs,
-                                        callbacks=cb, **kwargs)
+                                        callbacks=cb, mixup_alpha=mixup_alpha,
+                                        mixup_labels=mixup_labels,
+                                        **kwargs)
 
             y_pred_all.extend(y_pred_fold)
             y_test_all.extend(y_test_fold)
@@ -141,7 +145,8 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
 
 def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
                               train_ind, test_ind, batch_size=200, epochs=800,
-                              callbacks=None, **kwargs):
+                              callbacks=None, mixup_alpha=None,
+                              mixup_labels=None, **kwargs):
     """Implements single fold of cross-validation for seq2seq models.
 
     Args:
@@ -169,6 +174,14 @@ def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
     X_train, X_test = X[train_ind], X[test_ind]
     X_prior_train, X_prior_test = X_prior[train_ind], X_prior[test_ind]
     y_train, y_test = y[train_ind], y[test_ind]
+
+    if mixup_alpha is not None:
+        labels_train = mixup_labels[train_ind]
+        X_train, X_prior_train, y_train = generate_mixup(X_train,
+                                                         X_prior_train,
+                                                         y_train,
+                                                         labels_train,
+                                                         alpha=mixup_alpha)
 
     seq2seq_cb = Seq2seqPredictCallback(train_model, inf_enc, inf_dec,
                                         X_test, y_test)
