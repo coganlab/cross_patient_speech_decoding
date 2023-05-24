@@ -8,7 +8,7 @@ import numpy as np
 from collections import defaultdict
 
 
-def generate_mixup(x, prior, y, labels, alpha=0.2):
+def generate_mixup(x, prior, y, labels, alpha=1):
     """Generates synthetic data on batch via MixUp algorithm.
 
     Creates synthetic data from linear combinations of observations/trials
@@ -48,7 +48,7 @@ def generate_mixup(x, prior, y, labels, alpha=0.2):
     return x_mixed, prior_mixed, y_mixed
 
 
-def mixup_data(x1, x2, prior1, prior2, y1, y2, alpha=0.2):
+def mixup_data(x1, x2, prior1, prior2, y1, y2, alpha=1):
     """MixUp algorithm for data augmentation. Applies MixUp to a single
     observation/trial.
 
@@ -61,7 +61,10 @@ def mixup_data(x1, x2, prior1, prior2, y1, y2, alpha=0.2):
         (ndarray, ndarray): Mixed feature data and mixed label data.
     """
     # get beta distribution parameters
-    lam = np.random.beta(alpha, alpha)
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1
 
     # apply MixUp
     x_mixed = lam * x1 + (1 - lam) * x2
