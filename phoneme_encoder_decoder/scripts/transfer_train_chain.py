@@ -130,6 +130,7 @@ def transfer_chain():
     reg_lambda = 1e-6  # S14=1e-6, S26=1e-5
     dropout = 0.33
     bidir = True
+    pre_split = True
 
     # Train model
     num_folds = 5  # 5
@@ -193,6 +194,7 @@ def transfer_chain():
                                                 chain_y_tar,
                                                 num_folds=num_folds,
                                                 num_reps=num_reps,
+                                                pre_split=pre_split,
                                                 rand_state=kfold_rand_state,
                                                 pretrain_epochs=pre_epochs,
                                                 conv_epochs=conv_epochs,
