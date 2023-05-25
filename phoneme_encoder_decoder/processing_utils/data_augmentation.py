@@ -15,13 +15,18 @@ def generate_mixup(x, prior, y, labels, alpha=1):
     dataset).
 
     Args:
+        Args:
         x (ndarray): Feature data.
+        prior (ndarray): One-hot encoded prior label data.
         y (ndarray): One-hot encoded label data.
         labels (ndarray): Label data in original format (i.e. not one-hot
             encoded).
+        alpha (int|float, optional): MixUp hyperparameter for beta
+            distribution selection. Defaults to 1.
 
     Returns:
-        (ndarray, ndarray): Mixed feature data and mixed label data.
+        (ndarray, ndarray, ndarray): Combined original and mixed feature
+            data, one-hot prior data, and one-hot label data.
     """
 
     # get indices of duplicate observations/trials
@@ -46,34 +51,6 @@ def generate_mixup(x, prior, y, labels, alpha=1):
     x_mixed = np.concatenate((x, np.array(x_mixed)))
     prior_mixed = np.concatenate((prior, np.array(prior_mixed)))
     y_mixed = np.concatenate((y, np.array(y_mixed)))
-    return x_mixed, prior_mixed, y_mixed
-
-
-def mixup_data(x1, x2, prior1, prior2, y1, y2, alpha=1):
-    """Applies MixUp to a single observation/trial.
-
-    Adaptation of MixUp algorithm for data augmentation (Zhang et al., 2017,
-    https://arxiv.org/abs/1710.09412).
-
-    Args:
-        x (ndarray): Feature data for a single observation/trial.
-        y (ndarray): Label data for a single observation/trial.
-        alpha (float): MixUp hyperparameter. Defaults to 0.2.
-
-    Returns:
-        (ndarray, ndarray): Mixed feature data and mixed label data.
-    """
-    # get beta distribution parameters
-    if alpha > 0:
-        lam = np.random.beta(alpha, alpha)
-    else:
-        lam = 1
-
-    # apply MixUp
-    x_mixed = lam * x1 + (1 - lam) * x2
-    prior_mixed = lam * prior1 + (1 - lam) * prior2
-    y_mixed = lam * y1 + (1 - lam) * y2
-
     return x_mixed, prior_mixed, y_mixed
 
 
@@ -114,6 +91,40 @@ def generate_time_jitter(x, prior, y, jitter_vals, win_len, fs, time_axis=1):
     prior_jittered = np.concatenate((prior, np.array(prior_jittered)))
     y_jittered = np.concatenate((y, np.array(y_jittered)))
     return x_jittered, prior_jittered, y_jittered
+
+
+def mixup_data(x1, x2, prior1, prior2, y1, y2, alpha=1):
+    """Applies MixUp to a single observation/trial.
+
+    Adaptation of MixUp algorithm for data augmentation (Zhang et al., 2017,
+    https://arxiv.org/abs/1710.09412).
+
+    Args:
+        x1 (ndarray): Feature data for first duplicate.
+        x2 (ndarray): Feature data for first duplicate.
+        prior1 (ndarray): Prior label data (one-hot) for first duplicate.
+        prior2 (ndarray): Prior label data (one-hot) for first duplicate.
+        y1 (ndarray): Label data (one-hot) for first duplicate.
+        y2 (ndarray): Label data (one-hot) for first duplicate.
+        alpha (int|float, optional): MixUp hyperparameter for beta
+            distribution selection. Defaults to 1.
+
+    Returns:
+        (ndarray, ndarray, ndarray): Mixed feature data, one-hot prior data,
+        and one-hot label data.
+    """
+    # get beta distribution parameters
+    if alpha > 0:
+        lam = np.random.beta(alpha, alpha)
+    else:
+        lam = 1
+
+    # apply MixUp
+    x_mixed = lam * x1 + (1 - lam) * x2
+    prior_mixed = lam * prior1 + (1 - lam) * prior2
+    y_mixed = lam * y1 + (1 - lam) * y2
+
+    return x_mixed, prior_mixed, y_mixed
 
 
 def extract_tw(data, time_axis, t_range, win_range, fs):
