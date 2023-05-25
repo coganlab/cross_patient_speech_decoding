@@ -114,6 +114,8 @@ def train_rnn():
                                                              n_output)
 
     # Model parameters
+    win_len = 1  # 1 second decoding window
+    fs = 200
     n_input_time = int(win_len * fs)
     n_input_channel = X.shape[-1]
     model_type = 'lstm'
@@ -128,16 +130,17 @@ def train_rnn():
     bidir = True
 
     # Augmentation parameters
-    mixup_alpha = 100 if mixup else None
+    mixup_alpha = 1
+    mixup_dict = ({'alpha': mixup_alpha, 'labels': phon_labels} if mixup else
+                  None)
     j_end = 0.5
     # define jitter by number of points
     n_jitter = 8
     if n_jitter % 2 == 0:
         n_jitter += 1  # +1 to include 0
     jitter_vals = np.linspace(-j_end, j_end, n_jitter)
-    win_len = 1  # 1 second decoding window
-    fs = 200
-    jitter_dict = {'jitter_vals': jitter_vals, 'win_len': win_len, 'fs': fs}
+    jitter_dict = ({'jitter_vals': jitter_vals, 'win_len': win_len, 'fs': fs}
+                   if jitter else None)
 
     # Training parameters
     num_folds = 5
@@ -235,8 +238,7 @@ def train_rnn():
                                                 num_folds=num_folds,
                                                 num_reps=num_reps,
                                                 rand_state=kfold_rand_state,
-                                                mixup_alpha=mixup_alpha,
-                                                mixup_labels=seq_labels_train,
+                                                mixup_dict=mixup_dict,
                                                 jitter_dict=jitter_dict,
                                                 epochs=epochs,
                                                 early_stop=False,
