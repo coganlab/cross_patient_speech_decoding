@@ -130,12 +130,12 @@ def train_rnn():
     bidir = True
 
     # Augmentation parameters
-    mixup_alpha = 1
+    mixup_alpha = 5
     mixup_dict = ({'alpha': mixup_alpha, 'labels': phon_labels} if mixup else
                   None)
     j_end = 0.5
     # define jitter by number of points
-    n_jitter = 8
+    n_jitter = 5
     if n_jitter % 2 == 0:
         n_jitter += 1  # +1 to include 0
     jitter_vals = np.linspace(-j_end, j_end, n_jitter)
@@ -186,20 +186,21 @@ def train_rnn():
         if kfold:
             acc_filename = DATA_PATH + ('outputs/'
                                         f'{pt}{norm_ext}_acc_'
-                                        f'{num_folds}fold{mixup_ext}.pkl')
+                                        f'{num_folds}fold{mixup_ext}'
+                                        f'{jitter_ext}.pkl')
             plot_filename = DATA_PATH + ('outputs/'
                                          f'{pt}{norm_ext}'
                                          f'{num_folds}fold{mixup_ext}'
-                                         '_train_%d.png')
+                                         f'{jitter_ext}_train_%d.png')
         else:
             acc_filename = DATA_PATH + ('outputs/'
                                         f'{pt}{norm_ext}_acc_'
                                         f'{test_size}-heldout{mixup_ext}'
-                                        '.pkl')
+                                        f'{jitter_ext}.pkl')
             plot_filename = DATA_PATH + ('outputs/'
                                          f'{pt}{norm_ext}'
                                          f'{test_size}-heldout{mixup_ext}'
-                                         '_train_%d.png')
+                                         f'{jitter_ext}_train_%d.png')
 
     param_keys = ['model_type', 'filter_size', 'n_filters', 'n_units',
                   'n_layers', 'reg_lambda', 'dropout', 'bidir', 'mixup_alpha',
