@@ -107,19 +107,18 @@ def train_rnn():
         stacked_lstm_1Dcnn_model
     filter_size = 10
     n_filters = 50  # S14=100, S26=90
-    n_units = 256  # S14=800, S26=900
+    n_units = 512  # S14=800, S26=900
     n_layers = 1
-    reg_lambda = 1e-5  # S14=1e-6, S26=1e-5
-    dropout = 0.33  # 0.33
+    reg_lambda = 1e-6  # S14=1e-6, S26=1e-5
+    dropout = 0.6  # 0.33
     bidir = True
-    mixup_alpha = 5 if mixup else None
+    mixup_alpha = 100 if mixup else None
 
     # Train model
     num_folds = 5
     num_reps = 3
-    batch_size = 200
     epochs = 400
-    learning_rate = 1e-4
+    learning_rate = 5e-4
     kfold_rand_state = 7
 
     if not kfold:
@@ -208,7 +207,6 @@ def train_rnn():
                                                 rand_state=kfold_rand_state,
                                                 mixup_alpha=mixup_alpha,
                                                 mixup_labels=seq_labels_train,
-                                                batch_size=batch_size,
                                                 epochs=epochs,
                                                 early_stop=False,
                                                 verbose=verbose)
@@ -223,7 +221,7 @@ def train_rnn():
         else:
             _, _ = train_seq2seq(train_model, X_train,
                                  X_prior_train, y_train,
-                                 batch_size=batch_size,
+                                 batch_size=X_train.shape[0],
                                  epochs=epochs,
                                  verbose=verbose)
 
