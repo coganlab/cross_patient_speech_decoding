@@ -73,23 +73,23 @@ def generate_time_jitter(x, prior, y, jitter_vals, win_len, fs, time_axis=1):
             (Instead of observations, channels, etc.). Defaults to 1.
 
     Returns:
-        (ndarray, ndarray, ndarray): Combined original and jittered feature
-            data, one-hot prior data, and one-hot label data.
+        (ndarray, ndarray, ndarray): Jittered feature data, one-hot prior data,
+        and one-hot label data.
     """
     t_dur = x.shape[time_axis] / fs  # duration of full data
     t_range = np.array([-t_dur/2, t_dur/2])  # full data centered around 0
     reg_win = np.array([-win_len/2, win_len/2])  # non-jittered window, [-a, a]
-    x_jittered, prior_jittered, y_jittered = [], [], []
+    x_jittered = []
     for jitter in jitter_vals:
         jitter_win = reg_win + jitter  # jittered window, [-a + j, a + j]
         jitter_x = extract_tw(x, time_axis, t_range, jitter_win, fs)
         x_jittered.append(jitter_x)
-        prior_jittered.append(prior)  # same prior and labels for jitters
-        y_jittered.append(y)
 
-    x_jittered = np.concatenate((x, np.array(x_jittered)))
-    prior_jittered = np.concatenate((prior, np.array(prior_jittered)))
-    y_jittered = np.concatenate((y, np.array(y_jittered)))
+    x_jittered = np.reshape(x_jittered, (-1, int(win_len * fs), x.shape[-1]))
+    # prior and y are same for all jitter vals
+    prior_jittered = np.vstack([prior] * len(jitter_vals))
+    y_jittered = np.vstack([y] * len(jitter_vals))
+
     return x_jittered, prior_jittered, y_jittered
 
 
@@ -128,14 +128,28 @@ def mixup_data(x1, x2, prior1, prior2, y1, y2, alpha=1):
 
 
 def extract_tw(data, time_axis, t_range, win_range, fs):
-    centered_inds = tw_inds(t_range, win_range, fs)
-    return data.take(centered_inds, axis=time_axis)
+    tw_inds = get_tw_inds(t_range, win_range, fs)
+    tw_inds = correct_tw_inds(tw_inds, win_range, fs)
+    return data.take(tw_inds, axis=time_axis)
 
 
-def tw_inds(t_range, win_range, fs):
+def correct_tw_inds(inds, win_range, fs):
+    n_win = int((win_range[1] - win_range[0]) * fs)
+    n_inds = len(inds)
+    if n_inds < n_win:
+        diff = n_win - n_inds
+        inds = np.concatenate((inds, np.arange(inds[-1], inds[-1] + diff)))
+        return inds
+    if n_inds > n_win:
+        diff = n_inds - n_win
+        return inds[:-diff]
+    return inds
+
+
+def get_tw_inds(t_range, win_range, fs):
     t = np.linspace(t_range[0], t_range[1],
                     int((t_range[1] - t_range[0]) * fs))
-    return np.array([np.where((t >= win_range[0]) & (t <= win_range[1]))[0]])
+    return np.where((t >= win_range[0]) & (t <= win_range[1]))[0]
 
 
 def trial_order_generator(inds):
