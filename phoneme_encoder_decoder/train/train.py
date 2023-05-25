@@ -12,7 +12,8 @@ from keras.callbacks import EarlyStopping
 
 
 from processing_utils.sequence_processing import decode_seq2seq
-from processing_utils.mixup_generation import generate_mixup
+from processing_utils.data_augmentation import (augment_mixup,
+                                                augment_time_jitter)
 from .Seq2seqPredictCallback import Seq2seqPredictCallback
 
 
@@ -55,7 +56,7 @@ def shuffle_weights(model, weights=None, layer_idx=None):
 def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
                         num_folds=10, num_reps=3, epochs=800,
                         early_stop=False, rand_state=None,
-                        mixup_alpha=None, mixup_labels=None, **kwargs):
+                        mixup_dict=None, jitter_dict=None, **kwargs):
     """Trains a seq2seq encoder-decoder model using k-fold cross validation.
 
     Uses k-fold cross validation to train a seq2seq encoder-decoder
@@ -131,8 +132,8 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
                                         train_model, inf_enc, inf_dec, X,
                                         X_prior, y, train_ind, test_ind,
                                         epochs=epochs, callbacks=cb,
-                                        mixup_alpha=mixup_alpha,
-                                        mixup_labels=mixup_labels,
+                                        mixup_dict=mixup_dict,
+                                        jitter_dict=jitter_dict,
                                         **kwargs)
 
             y_pred_all.extend(y_pred_fold)
@@ -145,8 +146,8 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
 
 def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
                               train_ind, test_ind, epochs=800,
-                              callbacks=None, mixup_alpha=None,
-                              mixup_labels=None, **kwargs):
+                              callbacks=None, mixup_dict=None,
+                              jitter_dict=None, **kwargs):
     """Implements single fold of cross-validation for seq2seq models.
 
     Args:
@@ -175,13 +176,20 @@ def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
     X_prior_train, X_prior_test = X_prior[train_ind], X_prior[test_ind]
     y_train, y_test = y[train_ind], y[test_ind]
 
-    if mixup_alpha is not None:
-        labels_train = mixup_labels[train_ind]
-        X_train, X_prior_train, y_train = generate_mixup(X_train,
-                                                         X_prior_train,
-                                                         y_train,
-                                                         labels_train,
-                                                         alpha=mixup_alpha)
+    if mixup_dict is not None:
+        mixup_alpha = mixup_dict['alpha']
+        labels_train = (mixup_dict['labels'])[train_ind]
+        X_train, X_prior_train, y_train = augment_mixup(X_train,
+                                                        X_prior_train,
+                                                        y_train,
+                                                        labels_train,
+                                                        alpha=mixup_alpha)
+    if jitter_dict is not None:
+        X_train, X_prior_train, y_train = augment_time_jitter(
+                                            X_train, X_prior_train, y_train,
+                                            jitter_dict['jitter_vals'],
+                                            jitter_dict['win_len'],
+                                            jitter_dict['fs'])
 
     seq2seq_cb = Seq2seqPredictCallback(train_model, inf_enc, inf_dec,
                                         X_test, y_test)
