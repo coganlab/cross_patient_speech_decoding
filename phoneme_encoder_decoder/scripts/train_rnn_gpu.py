@@ -14,7 +14,8 @@ sys.path.insert(0, '..')
 from processing_utils.feature_data_from_mat import get_high_gamma_data
 from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
                                                   decode_seq2seq)
-from processing_utils.data_saving import append_pkl_accs
+from processing_utils.data_saving import (append_pkl_accs, dict_from_lists,
+                                          save_pkl_params)
 from processing_utils.mixup_generation import generate_mixup
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                        stacked_gru_1Dcnn_model)
@@ -146,28 +147,36 @@ def train_rnn():
         seq_labels_train = seq_labels
 
     if inputs['filename'] != '':
-        acc_filename = DATA_PATH + 'outputs/' + inputs['filename'] \
-                        + '.pkl'
-        plot_filename = DATA_PATH + 'outputs/plots/' + inputs['filename'] \
-                        + '_train_%d.png'
+        acc_filename = DATA_PATH + 'outputs/' + inputs['filename'] + '.pkl'
+        plot_filename = DATA_PATH + ('outputs/plots/' + inputs['filename']
+                                     + '_train_%d.png')
     else:
         if kfold:
             acc_filename = DATA_PATH + ('outputs/'
                                         f'{pt}{norm_ext}_acc_'
                                         f'{num_folds}fold{mixup_ext}.pkl')
             plot_filename = DATA_PATH + ('outputs/'
-                                        f'{pt}{norm_ext}'
-                                        f'{num_folds}fold{mixup_ext}'
-                                        '_train_%d.png')
+                                         f'{pt}{norm_ext}'
+                                         f'{num_folds}fold{mixup_ext}'
+                                         '_train_%d.png')
         else:
             acc_filename = DATA_PATH + ('outputs/'
                                         f'{pt}{norm_ext}_acc_'
                                         f'{test_size}-heldout{mixup_ext}'
                                         '.pkl')
             plot_filename = DATA_PATH + ('outputs/'
-                                        f'{pt}{norm_ext}'
-                                        f'{test_size}-heldout{mixup_ext}'
-                                        '_train_%d.png')
+                                         f'{pt}{norm_ext}'
+                                         f'{test_size}-heldout{mixup_ext}'
+                                         '_train_%d.png')
+
+    param_keys = ['model_type', 'filter_size', 'n_filters', 'n_units',
+                  'n_layers', 'reg_lambda', 'dropout', 'bidir', 'mixup_alpha',
+                  'num_folds', 'num_reps', 'epochs', 'learning_rate',
+                  'kfold_rand_state']
+    param_vals = [model_type, filter_size, n_filters, n_units, n_layers,
+                  reg_lambda, dropout, bidir, mixup_alpha, num_folds, num_reps,
+                  epochs, learning_rate, kfold_rand_state]
+    save_pkl_params(acc_filename, dict_from_lists(param_keys, param_vals))
 
     for i in range(n_iter):
         print('==============================================================')
