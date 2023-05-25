@@ -119,7 +119,7 @@ def train_rnn():
     num_reps = 3
     batch_size = 200
     epochs = 400
-    learning_rate = 5e-4
+    learning_rate = 1e-4
     kfold_rand_state = 7
 
     if not kfold:
