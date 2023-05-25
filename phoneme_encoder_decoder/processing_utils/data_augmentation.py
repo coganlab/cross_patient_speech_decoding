@@ -1,5 +1,4 @@
-""" Synthetic data augmentation via adaption of MixUp algorithm (Zhang et al.,
-2017, https://arxiv.org/abs/1710.09412)
+"""Synthetic data augmentation via functions.
 
 Author: Zac Spalding
 """
@@ -51,8 +50,10 @@ def generate_mixup(x, prior, y, labels, alpha=1):
 
 
 def mixup_data(x1, x2, prior1, prior2, y1, y2, alpha=1):
-    """MixUp algorithm for data augmentation. Applies MixUp to a single
-    observation/trial.
+    """Applies MixUp to a single observation/trial.
+
+    Adaptation of MixUp algorithm for data augmentation (Zhang et al., 2017,
+    https://arxiv.org/abs/1710.09412).
 
     Args:
         x (ndarray): Feature data for a single observation/trial.
