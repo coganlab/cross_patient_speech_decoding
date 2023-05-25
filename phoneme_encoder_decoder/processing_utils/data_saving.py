@@ -6,6 +6,17 @@ import os
 import pickle
 
 
+def dict_from_lists(param_keys, param_vals):
+    return dict(zip(param_keys, param_vals))
+
+
+def save_pkl_params(filename, param_dict, param_key='params'):
+    data = load_pkl_accs(filename)
+    data[param_key] = param_dict
+    with open(filename, 'wb+') as f:
+        pickle.dump(data, f, protocol=-1)
+
+
 def append_pkl_accs(filename, acc, cmat, acc_key='val_acc', cmat_key='cmat'):
     # load in previous data if it exists
     data = load_pkl_accs(filename)
