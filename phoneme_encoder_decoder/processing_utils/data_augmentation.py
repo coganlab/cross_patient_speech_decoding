@@ -60,7 +60,7 @@ def generate_time_jitter(x, prior, y, jitter_vals, win_len, fs, time_axis=1):
     Creates synthetic data by shifting the center location of a
     time window of length win_len. The center of the window is shifted by
     jitter_vals such that the windows of the synthetically generated data will
-    not be centered around the true onset.
+    not be centered around the true onset, except for a jitter value of 0.
 
     Args:
         x (ndarray): Feature data.
