@@ -7,7 +7,7 @@ import numpy as np
 from collections import defaultdict
 
 
-def generate_mixup(x, prior, y, labels, alpha=1):
+def augment_mixup(x, prior, y, labels, alpha=1):
     """Generates synthetic data on batch via MixUp algorithm.
 
     Creates synthetic data from linear combinations of observations/trials
@@ -54,7 +54,7 @@ def generate_mixup(x, prior, y, labels, alpha=1):
     return x_mixed, prior_mixed, y_mixed
 
 
-def generate_time_jitter(x, prior, y, jitter_vals, win_len, fs, time_axis=1):
+def augment_time_jitter(x, prior, y, jitter_vals, win_len, fs, time_axis=1):
     """Generates synthetic data on batch via time jittering.
 
     Creates synthetic data by shifting the center location of a
