@@ -5,6 +5,7 @@ Script to train a RNN model on the DCC.
 import os
 import sys
 import argparse
+import numpy as np
 from keras.optimizers import Adam
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from sklearn.model_selection import ShuffleSplit
@@ -16,7 +17,8 @@ from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
                                                   decode_seq2seq)
 from processing_utils.data_saving import (append_pkl_accs, dict_from_lists,
                                           save_pkl_params)
-from processing_utils.mixup_generation import generate_mixup
+from processing_utils.data_augmentation import (augment_mixup,
+                                                augment_time_jitter)
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                        stacked_gru_1Dcnn_model)
 from train.train import train_seq2seq_kfold, train_seq2seq
@@ -50,6 +52,11 @@ def init_parser():
                         required=False,
                         help='Generate synthetic trial data via MixUp (True)'
                              'or use only original data (False)')
+    parser.add_argument('-j', '--jitter', type=str, default='False',
+                        required=False,
+                        help='Generate synthetic trial data via time window'
+                             'jittering (True) or use only original data'
+                             '(False)')
     return parser
 
 
@@ -74,6 +81,8 @@ def train_rnn():
     cluster = str2bool(inputs['cluster'])
     mixup = str2bool(inputs['mixup'])
     mixup_ext = '_mixup' if mixup else ''
+    jitter = str2bool(inputs['jitter'])
+    jitter_ext = '_jitter' if jitter else ''
 
     if cluster:
         HOME_PATH = os.path.expanduser('~')
@@ -89,36 +98,52 @@ def train_rnn():
 
     # Load in data from workspace mat files
     n_output = 10
-    hg_trace, hg_map, phon_labels = get_high_gamma_data(DATA_PATH +
-                                                        f'{pt}/{pt}_HG'
-                                                        f'{chan_ext}'
-                                                        f'{norm_ext}'
-                                                        '_goodTrials.mat')
+    if jitter:
+        hg_trace, hg_map, phon_labels = get_high_gamma_data(
+                                            DATA_PATH + f'{pt}/{pt}_HG'
+                                            f'{chan_ext}{norm_ext}'
+                                            '_extended_goodTrials.mat')
+    else:
+        hg_trace, hg_map, phon_labels = get_high_gamma_data(
+                                            DATA_PATH + f'{pt}/{pt}_HG'
+                                            f'{chan_ext}{norm_ext}'
+                                            '_goodTrials.mat')
 
     X = hg_trace  # use HG traces (n_trials, n_channels, n_timepoints) for CNN
     X_prior, y, _, seq_labels = pad_sequence_teacher_forcing(phon_labels,
                                                              n_output)
 
-    # Build models
-    n_input_time = X.shape[1]
+    # Model parameters
+    n_input_time = int(win_len * fs)
     n_input_channel = X.shape[-1]
     model_type = 'lstm'
     model_fcn = stacked_gru_1Dcnn_model if model_type == 'gru' else \
         stacked_lstm_1Dcnn_model
     filter_size = 10
     n_filters = 50  # S14=100, S26=90
-    n_units = 512  # S14=800, S26=900
+    n_units = 256  # S14=800, S26=900
     n_layers = 1
     reg_lambda = 1e-6  # S14=1e-6, S26=1e-5
-    dropout = 0.6  # 0.33
+    dropout = 0.33  # 0.33
     bidir = True
-    mixup_alpha = 100 if mixup else None
 
-    # Train model
+    # Augmentation parameters
+    mixup_alpha = 100 if mixup else None
+    j_end = 0.5
+    # define jitter by number of points
+    n_jitter = 8
+    if n_jitter % 2 == 0:
+        n_jitter += 1  # +1 to include 0
+    jitter_vals = np.linspace(-j_end, j_end, n_jitter)
+    win_len = 1  # 1 second decoding window
+    fs = 200
+    jitter_dict = {'jitter_vals': jitter_vals, 'win_len': win_len, 'fs': fs}
+
+    # Training parameters
     num_folds = 5
     num_reps = 3
-    epochs = 400
-    learning_rate = 5e-4
+    epochs = 800
+    learning_rate = 1e-3
     kfold_rand_state = 7
 
     if not kfold:
@@ -134,10 +159,15 @@ def train_rnn():
                                              seq_labels[test_idx])
 
         if mixup:
-            X_train, X_prior_train, y_train = generate_mixup(
+            X_train, X_prior_train, y_train = augment_mixup(
                                                 X_train, X_prior_train,
                                                 y_train, seq_labels_train,
                                                 alpha=mixup_alpha)
+        if jitter:
+            X_train, X_prior_train, y_train = augment_time_jitter(
+                                                X_train, X_prior_train,
+                                                y_train, jitter_vals, win_len,
+                                                fs)
 
     else:
         X_train = X
@@ -207,6 +237,7 @@ def train_rnn():
                                                 rand_state=kfold_rand_state,
                                                 mixup_alpha=mixup_alpha,
                                                 mixup_labels=seq_labels_train,
+                                                jitter_dict=jitter_dict,
                                                 epochs=epochs,
                                                 early_stop=False,
                                                 verbose=verbose)
