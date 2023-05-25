@@ -53,7 +53,7 @@ def shuffle_weights(model, weights=None, layer_idx=None):
 
 
 def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
-                        num_folds=10, num_reps=3, batch_size=200, epochs=800,
+                        num_folds=10, num_reps=3, epochs=800,
                         early_stop=False, rand_state=None,
                         mixup_alpha=None, mixup_labels=None, **kwargs):
     """Trains a seq2seq encoder-decoder model using k-fold cross validation.
@@ -130,8 +130,8 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
             history, y_pred_fold, y_test_fold = train_seq2seq_single_fold(
                                         train_model, inf_enc, inf_dec, X,
                                         X_prior, y, train_ind, test_ind,
-                                        batch_size=batch_size, epochs=epochs,
-                                        callbacks=cb, mixup_alpha=mixup_alpha,
+                                        epochs=epochs, callbacks=cb,
+                                        mixup_alpha=mixup_alpha,
                                         mixup_labels=mixup_labels,
                                         **kwargs)
 
@@ -144,7 +144,7 @@ def train_seq2seq_kfold(train_model, inf_enc, inf_dec, X, X_prior, y,
 
 
 def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
-                              train_ind, test_ind, batch_size=200, epochs=800,
+                              train_ind, test_ind, epochs=800,
                               callbacks=None, mixup_alpha=None,
                               mixup_labels=None, **kwargs):
     """Implements single fold of cross-validation for seq2seq models.
@@ -190,7 +190,7 @@ def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
     else:
         callbacks = [seq2seq_cb]
     _, history = train_seq2seq(train_model, X_train, X_prior_train, y_train,
-                               batch_size=batch_size, epochs=epochs,
+                               batch_size=X_train.shape[0], epochs=epochs,
                                validation_data=([X_test, X_prior_test],
                                                 y_test),
                                callbacks=callbacks, **kwargs)

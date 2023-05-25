@@ -14,7 +14,8 @@ sys.path.insert(0, '..')
 from processing_utils.feature_data_from_mat import get_high_gamma_data
 from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
                                                   decode_seq2seq)
-from processing_utils.data_saving import append_pkl_accs
+from processing_utils.data_saving import (append_pkl_accs, dict_from_lists,
+                                          save_pkl_params)
 from processing_utils.mixup_generation import generate_mixup
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                        stacked_gru_1Dcnn_model)
@@ -106,19 +107,18 @@ def train_rnn():
         stacked_lstm_1Dcnn_model
     filter_size = 10
     n_filters = 50  # S14=100, S26=90
-    n_units = 256  # S14=800, S26=900
+    n_units = 512  # S14=800, S26=900
     n_layers = 1
     reg_lambda = 1e-6  # S14=1e-6, S26=1e-5
-    dropout = 0.33  # 0.33
+    dropout = 0.6  # 0.33
     bidir = True
-    mixup_alpha = 5 if mixup else None
+    mixup_alpha = 100 if mixup else None
 
     # Train model
     num_folds = 5
     num_reps = 3
-    batch_size = 200
-    epochs = 800
-    learning_rate = 1e-3
+    epochs = 400
+    learning_rate = 5e-4
     kfold_rand_state = 7
 
     if not kfold:
@@ -144,6 +144,38 @@ def train_rnn():
         X_prior_train = X_prior
         y_train = y
         seq_labels_train = seq_labels
+
+    if inputs['filename'] != '':
+        acc_filename = DATA_PATH + 'outputs/' + inputs['filename'] + '.pkl'
+        plot_filename = DATA_PATH + ('outputs/plots/' + inputs['filename']
+                                     + '_train_%d.png')
+    else:
+        if kfold:
+            acc_filename = DATA_PATH + ('outputs/'
+                                        f'{pt}{norm_ext}_acc_'
+                                        f'{num_folds}fold{mixup_ext}.pkl')
+            plot_filename = DATA_PATH + ('outputs/'
+                                         f'{pt}{norm_ext}'
+                                         f'{num_folds}fold{mixup_ext}'
+                                         '_train_%d.png')
+        else:
+            acc_filename = DATA_PATH + ('outputs/'
+                                        f'{pt}{norm_ext}_acc_'
+                                        f'{test_size}-heldout{mixup_ext}'
+                                        '.pkl')
+            plot_filename = DATA_PATH + ('outputs/'
+                                         f'{pt}{norm_ext}'
+                                         f'{test_size}-heldout{mixup_ext}'
+                                         '_train_%d.png')
+
+    param_keys = ['model_type', 'filter_size', 'n_filters', 'n_units',
+                  'n_layers', 'reg_lambda', 'dropout', 'bidir', 'mixup_alpha',
+                  'num_folds', 'num_reps', 'epochs', 'learning_rate',
+                  'kfold_rand_state']
+    param_vals = [model_type, filter_size, n_filters, n_units, n_layers,
+                  reg_lambda, dropout, bidir, mixup_alpha, num_folds, num_reps,
+                  epochs, learning_rate, kfold_rand_state]
+    save_pkl_params(acc_filename, dict_from_lists(param_keys, param_vals))
 
     for i in range(n_iter):
         print('==============================================================')
@@ -175,7 +207,6 @@ def train_rnn():
                                                 rand_state=kfold_rand_state,
                                                 mixup_alpha=mixup_alpha,
                                                 mixup_labels=seq_labels_train,
-                                                batch_size=batch_size,
                                                 epochs=epochs,
                                                 early_stop=False,
                                                 verbose=verbose)
@@ -186,13 +217,11 @@ def train_rnn():
                                     labels=range(1, n_output))
 
             plot_loss_acc(k_hist, epochs=epochs, save_fig=True,
-                          save_path=DATA_PATH +
-                          (f'outputs/plots/{pt}'
-                           f'_{num_folds}fold_train{mixup_ext}_{i+1}.png'))
+                          save_path=plot_filename % (i+1))
         else:
             _, _ = train_seq2seq(train_model, X_train,
                                  X_prior_train, y_train,
-                                 batch_size=batch_size,
+                                 batch_size=X_train.shape[0],
                                  epochs=epochs,
                                  verbose=verbose)
 
@@ -202,20 +231,6 @@ def train_rnn():
             acc = balanced_accuracy_score(labels_test, y_pred_test)
             cmat = confusion_matrix(labels_test, y_pred_test,
                                     labels=range(1, n_output))
-
-        if inputs['filename'] != '':
-            acc_filename = DATA_PATH + 'outputs/' + inputs['filename'] \
-                           + '.pkl'
-        else:
-            if kfold:
-                acc_filename = DATA_PATH + ('outputs/'
-                                            f'{pt}{norm_ext}_acc_'
-                                            f'{num_folds}fold{mixup_ext}.pkl')
-            else:
-                acc_filename = DATA_PATH + ('outputs/'
-                                            f'{pt}{norm_ext}_acc_'
-                                            f'{test_size}-heldout{mixup_ext}'
-                                            '.pkl')
 
         # save performance
         append_pkl_accs(acc_filename, acc, cmat, acc_key='val_acc' if kfold
