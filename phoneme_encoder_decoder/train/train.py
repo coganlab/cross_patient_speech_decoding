@@ -184,11 +184,17 @@ def train_seq2seq_single_fold(train_model, inf_enc, inf_dec, X, X_prior, y,
                                                         y_train,
                                                         labels_train,
                                                         alpha=mixup_alpha)
+
     if jitter_dict is not None:
         X_train, X_prior_train, y_train = augment_time_jitter(
                                             X_train, X_prior_train, y_train,
                                             jitter_dict['jitter_vals'],
                                             jitter_dict['win_len'],
+                                            jitter_dict['fs'])
+        # use jitter value of 0 to clip proper window from test data
+        X_test, X_prior_test, y_test = augment_time_jitter(
+                                            X_test, X_prior_test, y_test,
+                                            [0], jitter_dict['win_len'],
                                             jitter_dict['fs'])
 
     seq2seq_cb = Seq2seqPredictCallback(train_model, inf_enc, inf_dec,
@@ -232,7 +238,6 @@ def train_seq2seq(model, X, X_prior, y, batch_size=200, epochs=800, **kwargs):
     Returns:
         (Functional, Callback): Trained model, training performance history.
     """
-    # with tf.device('/device:GPU:0'):
     history = model.fit([X, X_prior], y, batch_size=batch_size,
                         epochs=epochs, **kwargs)
 
