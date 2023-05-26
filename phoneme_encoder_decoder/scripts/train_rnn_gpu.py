@@ -9,6 +9,7 @@ import numpy as np
 from keras.optimizers import Adam
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from sklearn.model_selection import ShuffleSplit
+from sklearn.utils import shuffle
 
 sys.path.insert(0, '..')
 
@@ -113,6 +114,9 @@ def train_rnn():
     X_prior, y, _, seq_labels = pad_sequence_teacher_forcing(phon_labels,
                                                              n_output)
 
+    # Shuffle data for chance accuracy
+    y = shuffle(y)
+
     # Model parameters
     win_len = 1  # 1 second decoding window
     fs = 200
@@ -131,7 +135,7 @@ def train_rnn():
 
     # Augmentation parameters
     mixup_alpha = 5
-    mixup_dict = ({'alpha': mixup_alpha, 'labels': phon_labels} if mixup else
+    mixup_dict = ({'alpha': mixup_alpha, 'labels': seq_labels} if mixup else
                   None)
     j_end = 0.5
     # define jitter by number of points
