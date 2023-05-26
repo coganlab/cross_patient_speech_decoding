@@ -8,6 +8,7 @@ import numpy as np
 from sklearn.model_selection import KFold
 from keras.optimizers import Adam
 from keras.models import Model
+from keras.callbacks import EarlyStopping
 
 from processing_utils.sequence_processing import decode_seq2seq
 from seq2seq_models.rnn_model_components import linear_cnn_1D_module
@@ -452,7 +453,9 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
         X1_test, y1_test = pre_val[0][0][0], pre_val[0][1]
         seq2seq_cb = Seq2seqPredictCallback(model, inf_enc, inf_dec, X1_test,
                                             y1_test)
-        cb = [seq2seq_cb]
+        es_cb = EarlyStopping(monitor='seq2seq_val_loss', patience=10,
+                              mode='min', restore_best_weights=True)
+        cb = [seq2seq_cb, es_cb]
 
     # pretrain full model on first patient
     _, pretrain_hist = train_seq2seq(
@@ -476,7 +479,7 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
             X1_test, y1_test = pre_val[i][0][0], pre_val[i][1]
             seq2seq_cb.set_models(model, inf_enc, inf_dec)
             seq2seq_cb.set_data(X1_test, y1_test)
-            cb = [seq2seq_cb]
+            cb[0] = seq2seq_cb
 
         # update conv layer for current pretrain pt to better extract features
         conv_hist = transfer_conv_update(
