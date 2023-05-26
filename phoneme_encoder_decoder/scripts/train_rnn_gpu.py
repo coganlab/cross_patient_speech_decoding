@@ -131,7 +131,7 @@ def train_rnn():
 
     # Augmentation parameters
     mixup_alpha = 5
-    mixup_dict = ({'alpha': mixup_alpha, 'labels': phon_labels} if mixup else
+    mixup_dict = ({'alpha': mixup_alpha, 'labels': seq_labels} if mixup else
                   None)
     j_end = 0.5
     # define jitter by number of points
