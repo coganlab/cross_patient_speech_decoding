@@ -24,7 +24,7 @@ from visualization.transfer_results_vis import plot_transfer_loss_acc
 def init_parser():
     parser = argparse.ArgumentParser(description='Transfer train RNN on DCC')
     parser.add_argument('-p', '--pretrain_patients', nargs='*', type=str,
-                        default='S14', required=False,
+                        default=['S14'], required=False,
                         help='Pretrain Patient ID')
     parser.add_argument('-t', '--transfer_patient', type=str, default='S33',
                         required=False, help='Transfer Patient ID')

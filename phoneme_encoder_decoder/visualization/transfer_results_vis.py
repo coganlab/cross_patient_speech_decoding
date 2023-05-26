@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import seaborn as sns
 
-from .plot_model_performance import create_CV_history_df
+from .plot_model_performance import extend_list_to_length, create_CV_history_df
+from train.train import track_model_history
 
 
 def combine_transfer_single(transfer_data, single_data):
@@ -155,9 +156,11 @@ def plot_transfer_loss_acc(t_hist, pre_epochs, conv_epochs, tar_epochs,
         pt_labels = [f"Pretrain {i+1}" for i in range(n_pre)]
         pt_labels.append("Target")
 
-    total_epochs = n_pre * (pre_epochs + conv_epochs) + tar_epochs
+    # total_epochs = n_pre * (pre_epochs + conv_epochs) + tar_epochs
+    # transfer_df = create_CV_history_df(t_hist, epochs=total_epochs)
 
-    transfer_df = create_CV_history_df(t_hist, epochs=total_epochs)
+    transfer_df, stage_epochs = create_transfer_chain_df(t_hist)
+
     transfer_df = transfer_df.astype(float)
     _, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
     sns.lineplot(data=transfer_df, x='epoch', y='loss', ax=ax1, color='blue',
@@ -176,8 +179,7 @@ def plot_transfer_loss_acc(t_hist, pre_epochs, conv_epochs, tar_epochs,
 
     # pretraining annotations
     for i in range(n_pre + 1):
-        annotate_transfer_stage((ax1, ax2), i, pt_labels, pre_epochs,
-                                conv_epochs, tar_epochs)
+        annotate_transfer_stage((ax1, ax2), i, pt_labels, stage_epochs)
 
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel('Loss')
@@ -195,18 +197,76 @@ def plot_transfer_loss_acc(t_hist, pre_epochs, conv_epochs, tar_epochs,
     plt.show()
 
 
-def annotate_transfer_stage(axs, curr_pre_num, pt_labels, pre_epochs,
-                            conv_epochs, tar_epochs, stage_color='black'):
+def create_transfer_chain_df(fold_hist_list):
+    stage_hist_list = group_hist_folds(fold_hist_list)
+    stage_dict_hists = []
+    for i_stage in range(len(stage_hist_list)):
+        stage_dict_hists.append(combine_chain_hists_by_metric(
+                           stage_hist_list[i_stage]))
+    # histories = combine_chain_hists_by_metric(stage_hist_list)
+    stage_epochs = extend_chain_hists(stage_dict_hists)
+    histories = collapse_across_stages(stage_dict_hists)
+    df = create_CV_history_df(histories, epochs=None)
+    return df, stage_epochs
+
+
+def group_hist_folds(fold_hist_list):
+    stage_hist_list = []
+    for i_stage in range(len(fold_hist_list[0])):
+        curr_fold = []
+        for i_fold in range(len(fold_hist_list)):
+            curr_fold.append(fold_hist_list[i_fold][i_stage])
+        stage_hist_list.append(curr_fold)
+    return stage_hist_list
+
+
+def extend_chain_hists(stage_hist_list):
+    epochs_by_stage = []
+    for hist in stage_hist_list:
+        # use max number of epochs across folds as length to extend to
+        fold_epochs = []
+        for fold in hist[list(hist.keys())[0]]:
+            curr_epochs = len(fold)
+            fold_epochs.append(curr_epochs)
+        max_epochs = max(fold_epochs)
+
+        for key in hist.keys():
+            for fold in range(len(hist[key])):
+                hist[key][fold] = extend_list_to_length(hist[key][fold],
+                                                        max_epochs)
+        epochs_by_stage.append(max_epochs)
+    return epochs_by_stage
+
+
+def combine_chain_hists_by_metric(fold_hist_list):
+    histories = {}
+    for i_fold in range(len(fold_hist_list)):
+        track_model_history(histories, fold_hist_list[i_fold])
+    return histories
+
+
+def collapse_across_stages(stage_hist_dicts):
+    histories = stage_hist_dicts[0]
+    for hist in stage_hist_dicts[1:]:
+        for key in hist.keys():
+            for fold in range(len(hist[key])):
+                histories[key][fold].extend(hist[key][fold])
+    return histories
+
+
+def annotate_transfer_stage(axs, curr_pre_num, pt_labels, stage_epochs,
+                            stage_color='black'):
+
     annot_y = 1.01
     for ax in axs:
         conv_x = 0
         if curr_pre_num != 0:  # no conv stage for first patient
             # conv annotation
-            conv_x = curr_pre_num*(conv_epochs + pre_epochs)
+            conv_x = np.sum(stage_epochs[:2*curr_pre_num])
             ax.axvline(x=conv_x, color=stage_color, linestyle='--')
             # x in data untis, y in axes fraction
             trans = ax.get_xaxis_transform()
-            annot_conv_x = conv_x - conv_epochs/2
+            annot_conv_x = conv_x - stage_epochs[curr_pre_num]/2
             ax.annotate(f'{pt_labels[curr_pre_num]}\nConv',
                         xy=(annot_conv_x, annot_y), xycoords=trans,
                         ha='center', fontsize=12)
@@ -215,10 +275,11 @@ def annotate_transfer_stage(axs, curr_pre_num, pt_labels, pre_epochs,
         trans = ax.get_xaxis_transform()
         if curr_pre_num == len(pt_labels) - 1:  # target annotation
             ax.annotate(f'{pt_labels[curr_pre_num]}\nFull',
-                        xy=((2*conv_x + tar_epochs)/2, annot_y),
+                        xy=((np.sum(stage_epochs[:-1]) +
+                             stage_epochs[-1]/2), annot_y),
                         xycoords=trans, ha='center', fontsize=12)
         else:
-            pre_x = curr_pre_num*conv_epochs + (curr_pre_num+1)*pre_epochs
+            pre_x = np.sum(stage_epochs[:(2*curr_pre_num+1)])
             ax.axvline(x=pre_x, color=stage_color, linestyle='--')
             ax.annotate(f'{pt_labels[curr_pre_num]}\nFull',
                         xy=((pre_x + conv_x)/2, annot_y), xycoords=trans,
