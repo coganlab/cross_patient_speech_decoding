@@ -306,8 +306,9 @@ def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
     X1, X1_prior, y1 = multi_pt_compat(X1, X1_prior, y1)
 
     # dictionary for tracking history of each fold
-    histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
-                 'val_loss': []}
+    # histories = {'accuracy': [], 'loss': [], 'val_accuracy': [],
+    #              'val_loss': []}
+    fold_hists = []
 
     # define k-fold cross validation
     cv = KFold(n_splits=num_folds, shuffle=True, random_state=rand_state)
@@ -344,12 +345,13 @@ def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                                            **kwargs)
 
             # track history in-place
-            track_model_history(histories, transfer_hist)
+            # track_model_history(histories, transfer_hist)
+            fold_hists.append(transfer_hist)
 
             y_pred_all.extend(y_pred_fold)
             y_test_all.extend(y_test_fold)
 
-    return histories, np.array(y_pred_all), np.array(y_test_all)
+    return fold_hists, np.array(y_pred_all), np.array(y_test_all)
 
 
 def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
@@ -465,7 +467,7 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                             callbacks=cb,
                             **kwargs)
 
-    curr_hist = pretrain_hist
+    curr_hist = [pretrain_hist]
     for i in range(1, len(X1)):
         # replace conv layer for compatibility with new channel amount
         n_channels = X1[i].shape[-1]
@@ -496,7 +498,9 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                             validation_data=pre_val[i] if do_val_pre else None,
                             callbacks=cb,
                             **kwargs)
-        curr_hist = concat_hists([curr_hist, conv_hist, pretrain_hist])
+        curr_hist.append(conv_hist)
+        curr_hist.append(pretrain_hist)
+        # curr_hist = concat_hists([curr_hist, conv_hist, pretrain_hist])
 
     # replace conv layer for compatibility with target pt channel amount
     tar_channels = X2.shape[-1]
@@ -530,10 +534,11 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                                    epochs=target_epochs,
                                    validation_data=tar_val,
                                    callbacks=cb, **kwargs)
+    curr_hist.append(conv_hist)
+    curr_hist.append(target_hist)
+    # total_hist = concat_hists([curr_hist, conv_hist, target_hist])
 
-    total_hist = concat_hists([curr_hist, conv_hist, target_hist])
-
-    return model, inf_enc, total_hist
+    return model, inf_enc, curr_hist
 
 
 def multi_pt_compat(X, X_prior, y):
