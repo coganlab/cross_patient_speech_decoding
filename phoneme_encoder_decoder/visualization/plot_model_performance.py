@@ -74,7 +74,8 @@ def remove_duplicate_cols(df):
 
 
 def create_CV_history_df(cv_histories, epochs=100):
-    extend_history_lists(cv_histories, epochs=epochs)
+    if epochs is not None:
+        extend_history_lists(cv_histories, epochs=epochs)
 
     df = pd.DataFrame()
     for key in cv_histories.keys():
