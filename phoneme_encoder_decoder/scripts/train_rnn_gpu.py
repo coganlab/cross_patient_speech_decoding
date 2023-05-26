@@ -9,7 +9,6 @@ import numpy as np
 from keras.optimizers import Adam
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from sklearn.model_selection import ShuffleSplit
-from sklearn.utils import shuffle
 
 sys.path.insert(0, '..')
 
@@ -113,9 +112,6 @@ def train_rnn():
     X = hg_trace  # use HG traces (n_trials, n_channels, n_timepoints) for CNN
     X_prior, y, _, seq_labels = pad_sequence_teacher_forcing(phon_labels,
                                                              n_output)
-
-    # Shuffle data for chance accuracy
-    y = shuffle(y)
 
     # Model parameters
     win_len = 1  # 1 second decoding window
