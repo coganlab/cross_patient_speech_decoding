@@ -256,14 +256,13 @@ def collapse_across_stages(stage_hist_dicts):
 
 def annotate_transfer_stage(axs, curr_pre_num, pt_labels, stage_epochs,
                             stage_color='black'):
+
     annot_y = 1.01
     for ax in axs:
-        shift = 1
         conv_x = 0
         if curr_pre_num != 0:  # no conv stage for first patient
             # conv annotation
-            conv_x = np.sum(stage_epochs[:curr_pre_num+shift])
-            shift += 1
+            conv_x = np.sum(stage_epochs[:2*curr_pre_num])
             ax.axvline(x=conv_x, color=stage_color, linestyle='--')
             # x in data untis, y in axes fraction
             trans = ax.get_xaxis_transform()
@@ -280,7 +279,7 @@ def annotate_transfer_stage(axs, curr_pre_num, pt_labels, stage_epochs,
                              stage_epochs[-1]/2), annot_y),
                         xycoords=trans, ha='center', fontsize=12)
         else:
-            pre_x = np.sum(stage_epochs[:(curr_pre_num+shift)])
+            pre_x = np.sum(stage_epochs[:(2*curr_pre_num+1)])
             ax.axvline(x=pre_x, color=stage_color, linestyle='--')
             ax.annotate(f'{pt_labels[curr_pre_num]}\nFull',
                         xy=((pre_x + conv_x)/2, annot_y), xycoords=trans,
