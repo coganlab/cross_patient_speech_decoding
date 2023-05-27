@@ -139,6 +139,7 @@ def transfer_chain():
     learning_rate = 1e-3
     kfold_rand_state = 7
 
+    n_iter_pre = 4
     pre_epochs = 200  # 200
     conv_epochs = 60  # 60
     tar_epochs = 540  # 540
@@ -199,6 +200,7 @@ def transfer_chain():
                                                 pretrain_epochs=pre_epochs,
                                                 conv_epochs=conv_epochs,
                                                 target_epochs=tar_epochs,
+                                                n_iter_pre=n_iter_pre,
                                                 batch_size=batch_size,
                                                 verbose=verbose)
 
@@ -209,7 +211,7 @@ def transfer_chain():
 
             plot_transfer_loss_acc(k_hist, pre_epochs, conv_epochs,
                                    tar_epochs, len(chain_X_pre),
-                                   pretrain_list+[target_pt],
+                                   n_iter_pre*pretrain_list+[target_pt],
                                    save_fig=True,
                                    save_path=DATA_PATH +
                                    (f'outputs/plots/transfer_'
@@ -226,6 +228,7 @@ def transfer_chain():
                                             pretrain_epochs=pre_epochs,
                                             conv_epochs=conv_epochs,
                                             target_epochs=tar_epochs,
+                                            n_iter_pre=n_iter_pre,
                                             batch_size=batch_size,
                                             verbose=verbose)
 
