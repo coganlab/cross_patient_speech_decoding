@@ -399,8 +399,8 @@ def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
 
 def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                          X2_prior, y2, pretrain_epochs=200, conv_epochs=60,
-                         target_epochs=540, pre_val=None, tar_val=None,
-                         conv_idx=1, enc_dec_idx=-1, **kwargs):
+                         target_epochs=540, n_iter_pre=1, pre_val=None,
+                         tar_val=None, conv_idx=1, enc_dec_idx=-1, **kwargs):
     """Train model with cross-patient transfer learning chain.
 
     Function to perform cross-patient transfer learning by pretraining a model
@@ -452,30 +452,15 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
     if do_val_pre:
         pre_val = val_data_to_list(pre_val)  # fix val data format if needed
         # val data for first pretrain patient - feature data and labels
-        X1_test, y1_test = pre_val[0][0][0], pre_val[0][1]
-        seq2seq_cb = Seq2seqPredictCallback(model, inf_enc, inf_dec, X1_test,
-                                            y1_test)
+        seq2seq_cb = Seq2seqPredictCallback(model, inf_enc, inf_dec)
         es_cb = EarlyStopping(monitor='seq2seq_val_loss', patience=10,
                               mode='min', restore_best_weights=True)
         cb = [seq2seq_cb, es_cb]
 
-    # pretrain full model on first patient
-    _, pretrain_hist = train_seq2seq(
-                            model, X1[0], X1_prior[0], y1[0],
-                            epochs=pretrain_epochs,
-                            validation_data=pre_val[0] if do_val_pre else None,
-                            callbacks=cb,
-                            **kwargs)
-
-    curr_hist = [pretrain_hist]
-    for i in range(1, len(X1)):
-        # replace conv layer for compatibility with new channel amount
-        n_channels = X1[i].shape[-1]
-        model, inf_enc = replace_conv_layer_channels(
-                                    model, inf_enc, n_channels,
-                                    conv_idx=conv_idx,
-                                    enc_dec_idx=enc_dec_idx)
-
+    curr_hist = []
+    first_pt = True
+    for iter in range(n_iter_pre * len(X1)):
+        i = iter % len(X1)  # index for current pretrain pt
         # make sure seq2seq_cb is using current pretrain pt models and data
         if do_val_pre:
             X1_test, y1_test = pre_val[i][0][0], pre_val[i][1]
@@ -483,14 +468,28 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
             seq2seq_cb.set_data(X1_test, y1_test)
             cb[0] = seq2seq_cb
 
-        # update conv layer for current pretrain pt to better extract features
-        conv_hist = transfer_conv_update(
-                            model, X1[i], X1_prior[i], y1[i],
-                            enc_dec_idx=enc_dec_idx,
-                            epochs=conv_epochs,
-                            validation_data=pre_val[i] if do_val_pre else None,
-                            callbacks=cb,
-                            **kwargs)
+        if not first_pt:  # no conv update for first pt
+            # replace conv layer for compatibility with new channel amount
+            n_channels = X1[i].shape[-1]
+            model, inf_enc = replace_conv_layer_channels(
+                                        model, inf_enc, n_channels,
+                                        conv_idx=conv_idx,
+                                        enc_dec_idx=enc_dec_idx)
+            if do_val_pre:
+                seq2seq_cb.set_models(model, inf_enc, inf_dec)
+                cb[0] = seq2seq_cb
+
+            # update conv layer to better extract features that work with RNN
+            conv_hist = transfer_conv_update(
+                                model, X1[i], X1_prior[i], y1[i],
+                                enc_dec_idx=enc_dec_idx,
+                                epochs=conv_epochs,
+                                validation_data=(pre_val[i] if do_val_pre
+                                                 else None),
+                                callbacks=cb,
+                                **kwargs)
+            curr_hist.append(conv_hist)
+
         # pretraining on current pretrain pt
         _, pretrain_hist = train_seq2seq(
                             model, X1[i], X1_prior[i], y1[i],
@@ -498,8 +497,8 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                             validation_data=pre_val[i] if do_val_pre else None,
                             callbacks=cb,
                             **kwargs)
-        curr_hist.append(conv_hist)
         curr_hist.append(pretrain_hist)
+        first_pt = False
         # curr_hist = concat_hists([curr_hist, conv_hist, pretrain_hist])
 
     # replace conv layer for compatibility with target pt channel amount
