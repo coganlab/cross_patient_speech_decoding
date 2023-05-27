@@ -178,7 +178,7 @@ def plot_transfer_loss_acc(t_hist, pre_epochs, conv_epochs, tar_epochs,
                  ax=ax2, color='red', label='Seq2seq Validation')
 
     # pretraining annotations
-    for i in range(n_pre + 1):
+    for i in range(len(pt_labels)):
         annotate_transfer_stage((ax1, ax2), i, pt_labels, stage_epochs)
 
     ax1.set_xlabel('Epoch')
