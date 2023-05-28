@@ -152,14 +152,13 @@ def transfer_seq2seq_kfold_diff_chans(train_model, pre_enc, pre_dec,
     # cv training
     y_pred_all, y_test_all = [], []
     # for train_ind, test_ind in cv.split(X2):
-    for f in range(num_folds):
+    for r in range(num_reps):  # repeat fold for stability
+        print(f'======== Repetition {r + 1} ========')
         train_ind1, test_ind1 = next(splits_1)
         train_ind2, test_ind2 = next(splits_2)
-        # fold = int((len(histories["accuracy"]) / num_reps) + 1)
-        fold = f + 1
-        print(f'===== Fold {fold} =====')
-        for _ in range(num_reps):  # repeat fold for stability
 
+        for f in range(num_folds):
+            print(f'===== Fold {f + 1} =====')
             # reset model weights for current fold (also resets associated
             # inference weights)
             shuffle_weights(train_model, weights=init_train_w)
@@ -247,8 +246,6 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
                                       enc_dec_layer_idx=-1, pre_val=None,
                                       transfer_val=None, pre_callbacks=None,
                                       transfer_callbacks=None, **kwargs):
-    lr = train_model.optimizer.get_config()['learning_rate']
-
     # pretrain on first subject
     pretrained_model, pretrain_hist = train_seq2seq(train_model, X1, X1_prior,
                                                     y1, epochs=pretrain_epochs,
@@ -257,14 +254,10 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
                                                     **kwargs)
 
     # create new model with modified input layer and same enc-dec weights
-    copy_applicable_weights(pretrained_model, tar_model, optimizer=Adam(lr),
-                            loss='categorical_crossentropy',
-                            metrics=['accuracy'])
+    copy_applicable_weights(pretrained_model, tar_model)
 
     # freeze encoder decoder weights
-    freeze_layer(tar_model, enc_dec_layer_idx, optimizer=Adam(lr),
-                 loss='categorical_crossentropy',
-                 metrics=['accuracy'])
+    freeze_layer(tar_model, enc_dec_layer_idx)
 
     # train convolutional layer on second subject split 1
     updated_cnn_model, conv_hist = train_seq2seq(tar_model, X2_train,
@@ -275,10 +268,7 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
                                                  **kwargs)
 
     # unfreeze encoder decoder weights
-    unfreeze_layer(updated_cnn_model, enc_dec_layer_idx,
-                   optimizer=Adam(lr),
-                   loss='categorical_crossentropy',
-                   metrics=['accuracy'])
+    unfreeze_layer(updated_cnn_model, enc_dec_layer_idx)
 
     # train on second subject split 2
     fine_tune_model, fine_tune_hist = train_seq2seq(
@@ -620,7 +610,7 @@ def concat_hists(hist_list):
     return new_hist
 
 
-def copy_applicable_weights(model, new_model, **kwargs):
+def copy_applicable_weights(model, new_model):
     """From https://datascience.stackexchange.com/questions/21734/keras-
     transfer-learning-changing-input-tensor-shape
     User: gebbissimo
@@ -630,4 +620,4 @@ def copy_applicable_weights(model, new_model, **kwargs):
             layer.set_weights(model.get_layer(name=layer.name).get_weights())
         except:
             print("Could not transfer weights for layer {}".format(layer.name))
-    new_model.compile(**kwargs)
+    new_model.compile(model.optimizer, model.loss, ['accuracy'])
