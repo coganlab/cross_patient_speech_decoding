@@ -142,7 +142,7 @@ def transfer_chain():
     n_iter_pre = 4
     pre_epochs = 200  # 200
     conv_epochs = 60  # 60
-    tar_epochs = 540  # 540
+    tar_epochs = 200  # 540
     total_epochs = len(chain_X_pre) * (pre_epochs + conv_epochs) + tar_epochs
 
     if not kfold:
