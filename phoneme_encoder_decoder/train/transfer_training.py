@@ -11,6 +11,8 @@ from keras.models import Model
 from keras.callbacks import EarlyStopping
 
 from processing_utils.sequence_processing import decode_seq2seq
+from processing_utils.data_augmentation import (augment_mixup,
+                                                augment_time_jitter)
 from seq2seq_models.rnn_model_components import linear_cnn_1D_module
 from .train import train_seq2seq, shuffle_weights, track_model_history
 from .Seq2seqPredictCallback import Seq2seqPredictCallback
@@ -347,7 +349,8 @@ def transfer_chain_kfold(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
 def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
                                X1_prior, y1, X2, X2_prior, y2,
                                train_ind_pre, test_ind_pre, train_ind_tar,
-                               test_ind_tar, pre_split=False, **kwargs):
+                               test_ind_tar, pre_split=False, mixup_data=None,
+                               jitter_data=None, **kwargs):
 
     # split pretrain data into train and test (may be list with multi pt data)
     if pre_split:
@@ -359,6 +362,47 @@ def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
                                           enumerate(X1_prior)])
         y1_train, y1_test = ([y[train_ind_pre[i]] for i, y in enumerate(y1)],
                              [y[test_ind_pre[i]] for i, y in enumerate(y1)])
+
+        for i in range(len(X1)):
+            X_train = X1_train[i]
+            X_prior_train = X1_prior_train[i]
+            y_train = y1_train[i]
+            X_test = X1_test[i]
+            X_prior_test = X1_prior_test[i]
+            y_test = y1_test[i]
+
+            if mixup_data is not None:
+                mixup_dict = mixup_data[i]
+                mixup_alpha = mixup_dict['alpha']
+                labels_train = (mixup_dict['labels'])[train_ind_pre[i]]
+                X_train, X_prior_train, y_train = augment_mixup(
+                                                        X_train,
+                                                        X_prior_train,
+                                                        y_train,
+                                                        labels_train,
+                                                        alpha=mixup_alpha)
+
+            if jitter_data is not None:
+                X_train, X_prior_train, y_train = augment_time_jitter(
+                                                    X_train, X_prior_train,
+                                                    y_train,
+                                                    jitter_data['jitter_vals'],
+                                                    jitter_data['win_len'],
+                                                    jitter_data['fs'])
+                # use jitter value of 0 to clip proper window from test data
+                X_test, X_prior_test, y_test = augment_time_jitter(
+                                                    X_test, X_prior_test,
+                                                    y_test, [0],
+                                                    jitter_data['win_len'],
+                                                    jitter_data['fs'])
+
+            X1_train[i] = X_train
+            X1_prior_train[i] = X_prior_train
+            y1_train[i] = y_train
+            X1_test[i] = X_test
+            X1_prior_test[i] = X_prior_test
+            y1_test[i] = y_test
+
         pre_val = ([([x, xp], y) for (x, xp, y) in
                     zip(X1_test, X1_prior_test, y1_test)])
     else:  # Use all pretrain data for each target fold
@@ -372,6 +416,31 @@ def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
     X2_prior_train, X2_prior_test = (X2_prior[train_ind_tar],
                                      X2_prior[test_ind_tar])
     y2_train, y2_test = y2[train_ind_tar], y2[test_ind_tar]
+
+    if mixup_data is not None:
+        mixup_dict = mixup_data[-1]
+        mixup_alpha = mixup_dict['alpha']
+        labels_train = (mixup_dict['labels'])[train_ind_tar]
+        X2_train, X2_prior_train, y2_train = augment_mixup(
+                                                X2_train,
+                                                X2_prior_train,
+                                                y2_train,
+                                                labels_train,
+                                                alpha=mixup_alpha)
+
+    if jitter_data is not None:
+        X2_train, X2_prior_train, y2_train = augment_time_jitter(
+                                            X2_train, X2_prior_train,
+                                            y2_train,
+                                            jitter_data['jitter_vals'],
+                                            jitter_data['win_len'],
+                                            jitter_data['fs'])
+        # use jitter value of 0 to clip proper window from test data
+        X2_test, X2_prior_test, y2_test = augment_time_jitter(
+                                            X2_test, X2_prior_test,
+                                            y2_test, [0],
+                                            jitter_data['win_len'],
+                                            jitter_data['fs'])
     tar_val = ([X2_test, X2_prior_test], y2_test)
 
     model, inf_enc, transfer_hist = transfer_train_chain(
