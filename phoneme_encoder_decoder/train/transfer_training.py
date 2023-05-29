@@ -152,14 +152,13 @@ def transfer_seq2seq_kfold_diff_chans(train_model, pre_enc, pre_dec,
     # cv training
     y_pred_all, y_test_all = [], []
     # for train_ind, test_ind in cv.split(X2):
-    for f in range(num_folds):
+    for r in range(num_reps):  # repeat fold for stability
+        print(f'======== Repetition {r + 1} ========')
         train_ind1, test_ind1 = next(splits_1)
         train_ind2, test_ind2 = next(splits_2)
-        # fold = int((len(histories["accuracy"]) / num_reps) + 1)
-        fold = f + 1
-        print(f'===== Fold {fold} =====')
-        for _ in range(num_reps):  # repeat fold for stability
 
+        for f in range(num_folds):
+            print(f'===== Fold {f + 1} =====')
             # reset model weights for current fold (also resets associated
             # inference weights)
             shuffle_weights(train_model, weights=init_train_w)
@@ -247,8 +246,6 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
                                       enc_dec_layer_idx=-1, pre_val=None,
                                       transfer_val=None, pre_callbacks=None,
                                       transfer_callbacks=None, **kwargs):
-    lr = train_model.optimizer.get_config()['learning_rate']
-
     # pretrain on first subject
     pretrained_model, pretrain_hist = train_seq2seq(train_model, X1, X1_prior,
                                                     y1, epochs=pretrain_epochs,
@@ -257,14 +254,10 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
                                                     **kwargs)
 
     # create new model with modified input layer and same enc-dec weights
-    copy_applicable_weights(pretrained_model, tar_model, optimizer=Adam(lr),
-                            loss='categorical_crossentropy',
-                            metrics=['accuracy'])
+    copy_applicable_weights(pretrained_model, tar_model)
 
     # freeze encoder decoder weights
-    freeze_layer(tar_model, enc_dec_layer_idx, optimizer=Adam(lr),
-                 loss='categorical_crossentropy',
-                 metrics=['accuracy'])
+    freeze_layer(tar_model, enc_dec_layer_idx)
 
     # train convolutional layer on second subject split 1
     updated_cnn_model, conv_hist = train_seq2seq(tar_model, X2_train,
@@ -275,10 +268,7 @@ def transfer_train_seq2seq_diff_chans(train_model, tar_model, X1, X1_prior, y1,
                                                  **kwargs)
 
     # unfreeze encoder decoder weights
-    unfreeze_layer(updated_cnn_model, enc_dec_layer_idx,
-                   optimizer=Adam(lr),
-                   loss='categorical_crossentropy',
-                   metrics=['accuracy'])
+    unfreeze_layer(updated_cnn_model, enc_dec_layer_idx)
 
     # train on second subject split 2
     fine_tune_model, fine_tune_hist = train_seq2seq(
@@ -399,8 +389,9 @@ def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
 
 def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                          X2_prior, y2, pretrain_epochs=200, conv_epochs=60,
-                         target_epochs=540, n_iter_pre=1, pre_val=None,
-                         tar_val=None, conv_idx=1, enc_dec_idx=-1, **kwargs):
+                         target_epochs=540, early_stop=True, n_iter_pre=1,
+                         pre_val=None, tar_val=None, conv_idx=1,
+                         enc_dec_idx=-1, **kwargs):
     """Train model with cross-patient transfer learning chain.
 
     Function to perform cross-patient transfer learning by pretraining a model
@@ -453,35 +444,40 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
         pre_val = val_data_to_list(pre_val)  # fix val data format if needed
         # val data for first pretrain patient - feature data and labels
         seq2seq_cb = Seq2seqPredictCallback(model, inf_enc, inf_dec)
-        es_cb = EarlyStopping(monitor='seq2seq_val_loss', patience=10,
-                              mode='min', restore_best_weights=True)
-        cb = [seq2seq_cb, es_cb]
+        cb = [seq2seq_cb]
+        if early_stop:
+            es_cb = EarlyStopping(monitor='seq2seq_val_loss', patience=10,
+                                  mode='min', restore_best_weights=True)
+            cb.append(es_cb)
+        
 
     curr_hist = []
     first_pt = True
+    conv_model = model
+    conv_enc = inf_enc
     for iter in range(n_iter_pre * len(X1)):
         i = iter % len(X1)  # index for current pretrain pt
         # make sure seq2seq_cb is using current pretrain pt models and data
         if do_val_pre:
             X1_test, y1_test = pre_val[i][0][0], pre_val[i][1]
-            seq2seq_cb.set_models(model, inf_enc, inf_dec)
+            seq2seq_cb.set_models(conv_model, conv_enc, inf_dec)
             seq2seq_cb.set_data(X1_test, y1_test)
             cb[0] = seq2seq_cb
 
         if not first_pt:  # no conv update for first pt
             # replace conv layer for compatibility with new channel amount
             n_channels = X1[i].shape[-1]
-            model, inf_enc = replace_conv_layer_channels(
-                                        model, inf_enc, n_channels,
+            conv_model, conv_enc = replace_conv_layer_channels(
+                                        pre_model, conv_enc, n_channels,
                                         conv_idx=conv_idx,
                                         enc_dec_idx=enc_dec_idx)
             if do_val_pre:
-                seq2seq_cb.set_models(model, inf_enc, inf_dec)
+                seq2seq_cb.set_models(conv_model, conv_enc, inf_dec)
                 cb[0] = seq2seq_cb
 
             # update conv layer to better extract features that work with RNN
             conv_hist = transfer_conv_update(
-                                model, X1[i], X1_prior[i], y1[i],
+                                conv_model, X1[i], X1_prior[i], y1[i],
                                 enc_dec_idx=enc_dec_idx,
                                 epochs=conv_epochs,
                                 validation_data=(pre_val[i] if do_val_pre
@@ -491,8 +487,8 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
             curr_hist.append(conv_hist)
 
         # pretraining on current pretrain pt
-        _, pretrain_hist = train_seq2seq(
-                            model, X1[i], X1_prior[i], y1[i],
+        pre_model, pretrain_hist = train_seq2seq(
+                            conv_model, X1[i], X1_prior[i], y1[i],
                             epochs=pretrain_epochs,
                             validation_data=pre_val[i] if do_val_pre else None,
                             callbacks=cb,
@@ -503,17 +499,17 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
 
     # replace conv layer for compatibility with target pt channel amount
     tar_channels = X2.shape[-1]
-    model, inf_enc = replace_conv_layer_channels(
-                                    model, inf_enc, tar_channels,
+    tar_model, tar_enc = replace_conv_layer_channels(
+                                    pre_model, conv_enc, tar_channels,
                                     conv_idx=conv_idx,
                                     enc_dec_idx=enc_dec_idx)
 
     # make sure seq2seq_cb is using target pt models and data
     if do_val_tar:
         if not do_val_pre:  # make callback if not already made for pretrain
-            seq2seq_cb = Seq2seqPredictCallback(model, inf_enc, inf_dec)
+            seq2seq_cb = Seq2seqPredictCallback(tar_model, tar_enc, inf_dec)
         else:  # otherwise update to current models
-            seq2seq_cb.set_models(model, inf_enc, inf_dec)
+            seq2seq_cb.set_models(tar_model, tar_enc, inf_dec)
 
         X2_test, y2_test = tar_val[0][0], tar_val[1]
         seq2seq_cb.set_data(X2_test, y2_test)
@@ -521,7 +517,7 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
 
     # update conv layer weights for target pt
     conv_hist = transfer_conv_update(
-                            model, X2, X2_prior, y2,
+                            tar_model, X2, X2_prior, y2,
                             enc_dec_idx=enc_dec_idx,
                             epochs=conv_epochs,
                             validation_data=tar_val,
@@ -529,15 +525,15 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                             **kwargs)
 
     # fine-tuning on target pt
-    _, target_hist = train_seq2seq(model, X2, X2_prior, y2,
-                                   epochs=target_epochs,
-                                   validation_data=tar_val,
-                                   callbacks=cb, **kwargs)
+    tar_model, target_hist = train_seq2seq(tar_model, X2, X2_prior, y2,
+                                           epochs=target_epochs,
+                                           validation_data=tar_val,
+                                           callbacks=cb, **kwargs)
     curr_hist.append(conv_hist)
     curr_hist.append(target_hist)
     # total_hist = concat_hists([curr_hist, conv_hist, target_hist])
 
-    return model, inf_enc, curr_hist
+    return tar_model, tar_enc, curr_hist
 
 
 def multi_pt_compat(X, X_prior, y):
@@ -620,7 +616,7 @@ def concat_hists(hist_list):
     return new_hist
 
 
-def copy_applicable_weights(model, new_model, **kwargs):
+def copy_applicable_weights(model, new_model):
     """From https://datascience.stackexchange.com/questions/21734/keras-
     transfer-learning-changing-input-tensor-shape
     User: gebbissimo
@@ -630,4 +626,4 @@ def copy_applicable_weights(model, new_model, **kwargs):
             layer.set_weights(model.get_layer(name=layer.name).get_weights())
         except:
             print("Could not transfer weights for layer {}".format(layer.name))
-    new_model.compile(**kwargs)
+    new_model.compile(model.optimizer, model.loss, ['accuracy'])

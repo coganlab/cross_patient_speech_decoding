@@ -139,7 +139,8 @@ def transfer_chain():
     learning_rate = 1e-3
     kfold_rand_state = 7
 
-    n_iter_pre = 4
+    early_stop = False
+    n_iter_pre = 1
     pre_epochs = 200  # 200
     conv_epochs = 60  # 60
     tar_epochs = 540  # 540
@@ -200,6 +201,7 @@ def transfer_chain():
                                                 pretrain_epochs=pre_epochs,
                                                 conv_epochs=conv_epochs,
                                                 target_epochs=tar_epochs,
+                                                early_stop=early_stop,
                                                 n_iter_pre=n_iter_pre,
                                                 batch_size=batch_size,
                                                 verbose=verbose)
@@ -228,6 +230,7 @@ def transfer_chain():
                                             pretrain_epochs=pre_epochs,
                                             conv_epochs=conv_epochs,
                                             target_epochs=tar_epochs,
+                                            early_stop=early_stop,
                                             n_iter_pre=n_iter_pre,
                                             batch_size=batch_size,
                                             verbose=verbose)
