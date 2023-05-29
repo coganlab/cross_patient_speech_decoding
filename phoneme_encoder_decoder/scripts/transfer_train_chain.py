@@ -5,6 +5,7 @@ Script to cross-patient transfer train a RNN model on the DCC.
 import os
 import sys
 import argparse
+import numpy as np
 from keras.optimizers import Adam
 from sklearn.metrics import balanced_accuracy_score, confusion_matrix
 from sklearn.model_selection import ShuffleSplit
@@ -14,7 +15,10 @@ sys.path.insert(0, '..')
 from processing_utils.feature_data_from_mat import get_high_gamma_data
 from processing_utils.sequence_processing import (pad_sequence_teacher_forcing,
                                                   decode_seq2seq)
-from processing_utils.data_saving import append_pkl_accs
+from processing_utils.data_saving import (append_pkl_accs, dict_from_lists,
+                                          save_pkl_params)
+from processing_utils.data_augmentation import (augment_mixup,
+                                                augment_time_jitter)
 from seq2seq_models.rnn_models import (stacked_lstm_1Dcnn_model,
                                        stacked_gru_1Dcnn_model)
 from train.transfer_training import transfer_chain_kfold, transfer_train_chain
@@ -47,6 +51,15 @@ def init_parser():
     parser.add_argument('-f', '--filename', type=str, default='',
                         required=False,
                         help='Output filename for performance saving')
+    parser.add_argument('-m', '--mixup', type=str, default='False',
+                        required=False,
+                        help='Generate synthetic trial data via MixUp (True)'
+                             'or use only original data (False)')
+    parser.add_argument('-j', '--jitter', type=str, default='False',
+                        required=False,
+                        help='Generate synthetic trial data via time window'
+                             'jittering (True) or use only original data'
+                             '(False)')
     return parser
 
 
@@ -71,6 +84,10 @@ def transfer_chain():
     kfold = str2bool(inputs['k_fold'])
     verbose = inputs['verbose']
     cluster = str2bool(inputs['cluster'])
+    mixup = str2bool(inputs['mixup'])
+    mixup_ext = '_mixup' if mixup else ''
+    jitter = str2bool(inputs['jitter'])
+    jitter_ext = '_jitter' if jitter else ''
 
     if cluster:
         HOME_PATH = os.path.expanduser('~')
@@ -88,37 +105,57 @@ def transfer_chain():
 
     # Load in data from workspace mat files
     n_output = 10
-    chain_X_pre, chain_X_prior_pre, chain_y_pre = [], [], []
+    chain_X_pre, chain_X_prior_pre, chain_y_pre, chain_lab_pre = [], [], [], []
     for curr_pt in pretrain_list:
-        pre_hg_trace, pre_hg_map, pre_phon_labels = get_high_gamma_data(
-                                                        DATA_PATH +
-                                                        f'{curr_pt}/'
-                                                        f'{curr_pt}_HG'
-                                                        f'{chan_ext}'
-                                                        f'{norm_ext}'
-                                                        '_goodTrials.mat')
+        if jitter:
+            pre_hg_trace, pre_hg_map, pre_phon_labels = get_high_gamma_data(
+                                                DATA_PATH + f'{curr_pt}/'
+                                                f'{curr_pt}_HG'
+                                                f'{chan_ext}{norm_ext}'
+                                                '_extended_goodTrials.mat')
+        else:
+            pre_hg_trace, pre_hg_map, pre_phon_labels = get_high_gamma_data(
+                                                DATA_PATH + f'{curr_pt}/'
+                                                f'{curr_pt}_HG'
+                                                f'{chan_ext}{norm_ext}'
+                                                '_goodTrials.mat')
+
         X = pre_hg_trace  # (n_trials, n_channels, n_timepoints) for 1D CNN
-        X_prior, y, _, _ = pad_sequence_teacher_forcing(pre_phon_labels,
+        X_prior, y, _, seq_labels = pad_sequence_teacher_forcing(
+                                                        pre_phon_labels,
                                                         n_output)
         chain_X_pre.append(X)
         chain_X_prior_pre.append(X_prior)
         chain_y_pre.append(y)
+        chain_lab_pre.append(seq_labels)
 
-    tar_hg_trace, tar_hg_map, tar_phon_labels = get_high_gamma_data(
-                                                    DATA_PATH +
-                                                    f'{target_pt}/'
-                                                    f'{target_pt}_HG'
-                                                    f'{chan_ext}'
-                                                    f'{norm_ext}'
-                                                    '_goodTrials.mat')
+    if jitter:
+        tar_hg_trace, tar_hg_map, tar_phon_labels = get_high_gamma_data(
+                                            DATA_PATH +
+                                            f'{target_pt}/'
+                                            f'{target_pt}_HG'
+                                            f'{chan_ext}'
+                                            f'{norm_ext}'
+                                            '_extended_goodTrials.mat')
+    else:
+        tar_hg_trace, tar_hg_map, tar_phon_labels = get_high_gamma_data(
+                                            DATA_PATH +
+                                            f'{target_pt}/'
+                                            f'{target_pt}_HG'
+                                            f'{chan_ext}'
+                                            f'{norm_ext}'
+                                            '_goodTrials.mat')
 
     chain_X_tar = tar_hg_trace  # (n_trials, n_channels, n_timepoints)
-    chain_X_prior_tar, chain_y_tar, _, _ = pad_sequence_teacher_forcing(
+    chain_X_prior_tar, chain_y_tar, _, tar_seq_labels = (
+                                        pad_sequence_teacher_forcing(
                                                 tar_phon_labels,
-                                                n_output)
+                                                n_output))
 
-    # Build models
-    n_input_time = chain_X_tar.shape[1]
+    # Model parameters
+    win_len = 1  # 1 second decoding window
+    fs = 200
+    n_input_time = int(win_len * fs)
     n_input_channel_pre = chain_X_pre[0].shape[-1]
     model_type = 'lstm'
     model_fcn = stacked_gru_1Dcnn_model if model_type == 'gru' else \
@@ -132,19 +169,66 @@ def transfer_chain():
     bidir = True
     pre_split = True
 
-    # Train model
-    num_folds = 5  # 5
-    num_reps = 3  # 3
+    # Augmentation parameters
+    mixup_alpha = 5
+    mixup_dicts = [] if mixup else None
+    if mixup:
+        for i in range(len(chain_X_pre)):
+            mixup_dicts.append({'alpha': mixup_alpha,
+                                'labels': chain_lab_pre[i]})
+        mixup_dicts.append({'alpha': mixup_alpha,
+                            'labels': tar_seq_labels})
+    j_end = 0.5
+    # define jitter by number of points
+    n_jitter = 5
+    if n_jitter % 2 == 0:
+        n_jitter += 1  # +1 to include 0
+    jitter_vals = np.linspace(-j_end, j_end, n_jitter)
+    jitter_dict = ({'jitter_vals': jitter_vals, 'win_len': win_len, 'fs': fs}
+                   if jitter else None)
+
+    # Training parameters
+    num_folds = 2  # 5
+    num_reps = 1  # 3
     batch_size = 200
     learning_rate = 1e-3
     kfold_rand_state = 7
 
-    early_stop = False
+    # Transfer parameters
+    early_stop = True
     n_iter_pre = 1
     pre_epochs = 200  # 200
     conv_epochs = 60  # 60
-    tar_epochs = 540  # 540
+    tar_epochs = 5  # 540
     total_epochs = len(chain_X_pre) * (pre_epochs + conv_epochs) + tar_epochs
+
+    if inputs['filename'] != '':
+        acc_filename = DATA_PATH + 'outputs/' + inputs['filename'] + '.pkl'
+        plot_filename = DATA_PATH + ('outputs/plots/' + inputs['filename']
+                                     + '_train_%d.png')
+    else:
+        if kfold:
+            acc_filename = DATA_PATH + ('outputs/'
+                                        f'[{"-".join(pretrain_list)}]'
+                                        f'-{target_pt}'
+                                        f'{norm_ext}_acc_'
+                                        f'{num_folds}fold.pkl')
+            plot_filename = DATA_PATH + ('outputs/'
+                                         f'[{"-".join(pretrain_list)}]'
+                                         f'-{target_pt}'
+                                         f'{norm_ext}'
+                                         f'{num_folds}fold_train_%d.png')
+        else:
+            acc_filename = DATA_PATH + ('outputs/'
+                                        f'[{"-".join(pretrain_list)}]'
+                                        f'-{target_pt}'
+                                        f'{norm_ext}_acc_'
+                                        f'{test_size}-heldout.pkl')
+            plot_filename = DATA_PATH + ('outputs/'
+                                         f'[{"-".join(pretrain_list)}]'
+                                         f'-{target_pt}'
+                                         f'{norm_ext}'
+                                         f'{test_size}-heldout_train_%d.png')
 
     if not kfold:
         # Hold out test data set
@@ -163,12 +247,63 @@ def transfer_chain():
         y_train_pre, y_test_pre = (
             [y[train_idx_pre[i]] for i, y in enumerate(chain_y_pre)],
             [y[test_idx_pre[i]] for i, y in enumerate(chain_y_pre)])
+        lab_train_pre, lab_test_pre = (
+            [l[train_idx_pre[i]] for i, l in enumerate(chain_lab_pre)],
+            [l[test_idx_pre[i]] for i, l in enumerate(chain_lab_pre)]
+        )
+
+        for i in range(len(chain_X_pre)):
+            X_train = X_train_pre[i]
+            X_prior_train = X_prior_train_pre[i]
+            y_train = y_train_pre[i]
+            lab_train = lab_train_pre[i]
+            if mixup:
+                X_train, X_prior_train, y_train = augment_mixup(
+                                                    X_train, X_prior_train,
+                                                    y_train, lab_train,
+                                                    alpha=mixup_alpha)
+            if jitter:
+                X_train, X_prior_train, y_train = augment_time_jitter(
+                                                    X_train, X_prior_train,
+                                                    y_train, jitter_vals,
+                                                    win_len,
+                                                    fs)
+            X_train_pre[i] = X_train
+            X_prior_train_pre[i] = X_prior_train
+            y_train_pre[i] = y_train
 
         train_idx, test_idx = next(data_split.split(chain_X_tar))
         X_train_tar, X_test_tar = chain_X_tar[train_idx], chain_X_tar[test_idx]
         X_prior_train_tar, X_prior_test_tar = (chain_X_prior_tar[train_idx],
                                                chain_X_prior_tar[test_idx])
         y_train_tar, y_test_tar = chain_y_tar[train_idx], chain_y_tar[test_idx]
+        lab_train_tar, lab_test_tar = (tar_seq_labels[train_idx],
+                                       tar_seq_labels[test_idx])
+        if mixup:
+            X_train_tar, X_prior_train_tar, y_train_tar = augment_mixup(
+                                                    X_train_tar,
+                                                    X_prior_train_tar,
+                                                    y_train_tar, lab_train_tar,
+                                                    alpha=mixup_alpha)
+        if jitter:
+            X_train_tar, X_prior_train_tar, y_train_tar = augment_time_jitter(
+                                                            X_train_tar,
+                                                            X_prior_train_tar,
+                                                            y_train_tar,
+                                                            jitter_vals,
+                                                            win_len,
+                                                            fs)
+
+    param_keys = ['model_type', 'filter_size', 'n_filters', 'n_units',
+                  'n_layers', 'reg_lambda', 'dropout', 'bidir', 'mixup_alpha',
+                  'n_jitter', 'num_folds', 'num_reps', 'pre_epochs',
+                  'conv_epochs', 'tar_epochs', 'learning_rate',
+                  'kfold_rand_state']
+    param_vals = [model_type, filter_size, n_filters, n_units, n_layers,
+                  reg_lambda, dropout, bidir, mixup_alpha, n_jitter, num_folds,
+                  num_reps, pre_epochs, conv_epochs, tar_epochs, learning_rate,
+                  kfold_rand_state]
+    save_pkl_params(acc_filename, dict_from_lists(param_keys, param_vals))
 
     for i in range(n_iter):
         print('==============================================================')
@@ -198,6 +333,8 @@ def transfer_chain():
                                                 num_reps=num_reps,
                                                 pre_split=pre_split,
                                                 rand_state=kfold_rand_state,
+                                                mixup_data=mixup_dicts,
+                                                jitter_data=jitter_dict,
                                                 pretrain_epochs=pre_epochs,
                                                 conv_epochs=conv_epochs,
                                                 target_epochs=tar_epochs,
@@ -215,11 +352,7 @@ def transfer_chain():
                                    tar_epochs, len(chain_X_pre),
                                    n_iter_pre*pretrain_list+[target_pt],
                                    save_fig=True,
-                                   save_path=DATA_PATH +
-                                   (f'outputs/plots/transfer_'
-                                    f'[{"-".join(pretrain_list)}]-'
-                                    f'{target_pt}_'
-                                    f'{num_folds}fold_train_{i+1}.png'))
+                                   save_path=plot_filename % (i+1))
 
         else:
             train_model, inf_enc, _ = transfer_train_chain(
@@ -241,23 +374,6 @@ def transfer_chain():
             acc = balanced_accuracy_score(labels_test, y_pred_test)
             cmat = confusion_matrix(labels_test, y_pred_test,
                                     labels=range(1, n_output))
-
-        if inputs['filename'] != '':
-            acc_filename = DATA_PATH + 'outputs/' + inputs['filename'] \
-                           + '.pkl'
-        else:
-            if kfold:
-                acc_filename = DATA_PATH + ('outputs/transfer_'
-                                            f'[{"-".join(pretrain_list)}]'
-                                            f'-{target_pt}'
-                                            f'{norm_ext}_acc_'
-                                            f'{num_folds}fold.pkl')
-            else:
-                acc_filename = DATA_PATH + ('outputs/transfer_'
-                                            f'[{"-".join(pretrain_list)}]'
-                                            f'-{target_pt}'
-                                            f'{norm_ext}_acc_'
-                                            f'{test_size}-heldout.pkl')
 
         # save performance
         append_pkl_accs(acc_filename, acc, cmat, acc_key='val_acc' if kfold
