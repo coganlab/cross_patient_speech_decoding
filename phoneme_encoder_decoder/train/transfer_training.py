@@ -389,8 +389,9 @@ def transfer_chain_single_fold(model, inf_enc, inf_dec, X1,
 
 def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
                          X2_prior, y2, pretrain_epochs=200, conv_epochs=60,
-                         target_epochs=540, n_iter_pre=1, pre_val=None,
-                         tar_val=None, conv_idx=1, enc_dec_idx=-1, **kwargs):
+                         target_epochs=540, early_stop=True, n_iter_pre=1,
+                         pre_val=None, tar_val=None, conv_idx=1,
+                         enc_dec_idx=-1, **kwargs):
     """Train model with cross-patient transfer learning chain.
 
     Function to perform cross-patient transfer learning by pretraining a model
@@ -443,9 +444,12 @@ def transfer_train_chain(model, inf_enc, inf_dec, X1, X1_prior, y1, X2,
         pre_val = val_data_to_list(pre_val)  # fix val data format if needed
         # val data for first pretrain patient - feature data and labels
         seq2seq_cb = Seq2seqPredictCallback(model, inf_enc, inf_dec)
-        es_cb = EarlyStopping(monitor='seq2seq_val_loss', patience=10,
-                              mode='min', restore_best_weights=True)
-        cb = [seq2seq_cb, es_cb]
+        cb = [seq2seq_cb]
+        if early_stop:
+            es_cb = EarlyStopping(monitor='seq2seq_val_loss', patience=10,
+                                  mode='min', restore_best_weights=True)
+            cb.append(es_cb)
+        
 
     curr_hist = []
     first_pt = True
