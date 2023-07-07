@@ -1,3 +1,8 @@
+""" Hierarchical Wasserstein Alignment (HiWA) functions.
+
+From https://github.com/nerdslab/PyHiWA/tree/master.
+"""
+
 import numpy as np
 from sklearn.decomposition import PCA
 from scipy.linalg import sqrtm, orth

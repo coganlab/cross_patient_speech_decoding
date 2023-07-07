@@ -1,3 +1,8 @@
+""" Hierarchical Wasserstein Alignment (HiWA) util functions.
+
+From https://github.com/nerdslab/PyHiWA/tree/master.
+"""
+
 import numpy as np
 from scipy.io import loadmat
 import matplotlib.pyplot as plt
