@@ -4,22 +4,26 @@ Author: Zac Spalding
 Adapted from code by Kumar Duraivel
 """
 
+import os
 import numpy as np
 import scipy.io as sio
 
 
-def load_subject_high_gamma(subject_id, sig_channel=False, zscore=False):
-
-    filename = process_mat_filename(subject_id, sig_channel, zscore)
+def load_subject_high_gamma(subject_id, sig_channel=False, zscore=False,
+                            cluster=False):
+    filename = process_mat_filename(subject_id, sig_channel, zscore,
+                                    cluster=cluster)
     hg_trace, hg_map, phon_labels = get_high_gamma_data(filename)
 
     return hg_trace, hg_map, phon_labels
 
 
-def load_subject_high_gamma_phoneme(subject_id, phons=[1, 2, 3]):
+def load_subject_high_gamma_phoneme(subject_id, phons=[1, 2, 3],
+                                    cluster=False):
     subj_dict = dict(ID=subject_id)
     for p in phons:
-        filename = process_mat_filename(subject_id, True, False, phon=p)
+        filename = process_mat_filename(subject_id, True, False, phon=p,
+                                        cluster=cluster)
         hg_trace, hg_map, phon_labels = get_high_gamma_data(filename)
         subj_dict['X' + str(p)] = hg_trace
         subj_dict['X' + str(p) + '_map'] = hg_map
@@ -36,8 +40,13 @@ def get_feature_data(mat_data, feature_name):
     return np.squeeze(np.array(mat_data[feature_name]))
 
 
-def process_mat_filename(subject_id, sig_channel, zscore, phon=None):
-    data_dir = 'data/'
+def process_mat_filename(subject_id, sig_channel, zscore, phon=None,
+                         cluster=False):
+    if cluster:
+        home_path = os.path.expanduser('~')
+        data_dir = home_path + '/workspace/'
+    else:
+        data_dir = 'data/'
     subject_dir = subject_id + '/'
     filename_base = subject_id + '_HG'
     if sig_channel:
