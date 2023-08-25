@@ -30,6 +30,14 @@ def cnd_avg(data, labels):
 
 
 def label2str(labels):
+    if len(labels.shape) > 1:
+        labels = label_seq2str(labels)
+    else:
+        labels = labels.astype(str)
+    return labels
+
+
+def label_seq2str(labels):
     """Converts a 2D array of label sequences into a 1D array of label strings.
 
     For example, if a trial has multiple labels, such as [1, 2, 3], this
