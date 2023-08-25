@@ -19,10 +19,10 @@ def load_subject_high_gamma(subject_id, sig_channel=False, zscore=False,
 
 
 def load_subject_high_gamma_phoneme(subject_id, phons=[1, 2, 3],
-                                    cluster=False):
+                                    cluster=False, zscore=False):
     subj_dict = dict(ID=subject_id)
     for p in phons:
-        filename = process_mat_filename(subject_id, True, False, phon=p,
+        filename = process_mat_filename(subject_id, True, zscore, phon=p,
                                         cluster=cluster)
         hg_trace, hg_map, phon_labels = get_high_gamma_data(filename)
         subj_dict['X' + str(p)] = hg_trace
@@ -46,7 +46,8 @@ def process_mat_filename(subject_id, sig_channel, zscore, phon=None,
         home_path = os.path.expanduser('~')
         data_dir = home_path + '/workspace/'
     else:
-        data_dir = 'data/'
+        # data_dir = 'data/'
+        data_dir = '../data/'
     subject_dir = subject_id + '/'
     filename_base = subject_id + '_HG'
     if sig_channel:
