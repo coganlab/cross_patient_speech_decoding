@@ -28,7 +28,7 @@ def load_subject_high_gamma_phoneme(subject_id, phons=[1, 2, 3],
         subj_dict['X' + str(p)] = hg_trace
         subj_dict['X' + str(p) + '_map'] = hg_map
         subj_dict['y' + str(p)] = phon_labels[:, p-1]
-    subj_dict['y_full'] = phon_labels
+    subj_dict['y_full_phon'] = phon_labels
     return subj_dict
 
 
