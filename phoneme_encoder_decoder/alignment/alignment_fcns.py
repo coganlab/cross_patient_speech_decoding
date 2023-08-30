@@ -5,26 +5,80 @@ Cogan & Viventi Labs, Duke University
 """
 
 import numpy as np
+from sklearn.decomposition import PCA
 from utils import cnd_avg, label2str
 
 
-def joint_PCA_decomp():
+def apply_joint_PCA_decomp(features, labels, n_components=40, dim_red=PCA):
+    """Wrapper function around joint PCA decomposition to calculate shared
+    latent space and also transform input
+
+    Args:
+        features (_type_): _description_
+        labels (_type_): _description_
+        n_components (int, optional): _description_. Defaults to 40.
+        dim_red (_type_, optional): _description_. Defaults to PCA.
+
+    Returns:
+        _type_: _description_
+    """
+    latent_transforms = get_joint_PCA_transforms(features, labels,
+                                                 n_components=n_components,
+                                                 dim_red=dim_red)
+    transform_feats_lst = [0]*len(latent_transforms)
+    for i, (feats, transform) in enumerate(zip(features, latent_transforms)):
+        transform_feats = feats.reshape(-1, feats.shape[-1]) @ transform
+        transform_feats_lst[i] = transform_feats.reshape(feats.shape[0], -1)
+    return (*transform_feats_lst,)
+
+
+def get_joint_PCA_transforms(features, labels, n_components=40, dim_red=PCA):
+    """Calculates a shared latent space across features from multiple patients
+    or recording sessions.
+
+    Uses the method described by Pandarinath et al. in
+    https://www.nature.com/articles/s41592-018-0109-9 (2018) for pre-computing
+    session specific read-in matrices (see Methods: Modifications to the LFADS
+    algorithm for stitching together data from multiple recording sessions)
+
+    Args:
+        features (list): List of features from multiple sources to compute
+            shared latent space.
+        labels (list): List of labels corresponding to feature sources. Must
+            be the same length as features.
+        n_components (int, optional): Number of components for dimensionality
+            reduction i.e. dimensionality of latent space. Defaults to 40.
+        dim_red (Callable, optional): Dimensionality reduction function. Must
+            implement sklearn-style fit_transform() function. Defaults to PCA.
+
+    Returns:
+        (tuple): tuple containing:
+            Transformation matrices to shared latent space for each input
+            source. Length will be equal to the length of the input feature
+            list.
+    """
     # condition average firing rates for all datasets
+    cnd_avg_data = []*len(features)
+    for i, feats in enumerate(features):
+        cnd_avg_data[i] = cnd_avg(feats, labels)
 
-    # combine all datasets into one matrix (sum channels x n_timepoints x
-    # n_conditions)
+    # combine all datasets into one matrix (n_conditions x n_timepoints x
+    # sum channels)
+    cross_pt_mat = np.concatenate(cnd_avg_data, axis=-1)
+    # reshape to 2D with channels as final dim
+    cross_pt_mat = cross_pt_mat.reshape(-1, cross_pt_mat.shape[-1])
 
-    # perform PCA on channel dim of combined matrix
-
-    # calculate condition averaged firing rates by patient
+    # perform dimensionality reduction on channel dim of combined matrix
+    latent_mat = dim_red(n_components=n_components).fit_transform(cross_pt_mat)
 
     # calculate per pt channel -> factor transformation matrices
+    pt_latent_trans = [0]*len(cnd_avg_data)
+    for i, pt_ca in enumerate(cnd_avg_data):
+        pt_ca = pt_ca.reshape(pt_ca.shape[0], -1)  # isolate channel dim
+        latent_trans = np.linalg.pinv(latent_mat) @ pt_ca  # lst_sq soln
+        pt_latent_trans[i] = latent_trans
 
-    pass
-
-
-def get_factor_matrix(n_components):
-    pass
+    return (*latent_trans,)
 
 
 def CCA_align_by_class(X_a, X_b, y_a, y_b, return_space='b_to_a'):
