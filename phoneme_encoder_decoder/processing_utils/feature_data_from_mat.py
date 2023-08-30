@@ -10,20 +10,21 @@ import scipy.io as sio
 
 
 def load_subject_high_gamma(subject_id, sig_channel=False, zscore=False,
-                            cluster=False):
+                            cluster=False, data_dir=None):
     filename = process_mat_filename(subject_id, sig_channel, zscore,
-                                    cluster=cluster)
+                                    cluster=cluster, data_dir=data_dir)
     hg_trace, hg_map, phon_labels = get_high_gamma_data(filename)
 
     return hg_trace, hg_map, phon_labels
 
 
 def load_subject_high_gamma_phoneme(subject_id, phons=[1, 2, 3],
-                                    cluster=False, zscore=False):
+                                    cluster=False, zscore=False,
+                                    data_dir=None):
     subj_dict = dict(ID=subject_id)
     for p in phons:
         filename = process_mat_filename(subject_id, True, zscore, phon=p,
-                                        cluster=cluster)
+                                        cluster=cluster, data_dir=data_dir)
         hg_trace, hg_map, phon_labels = get_high_gamma_data(filename)
         subj_dict['X' + str(p)] = hg_trace
         subj_dict['X' + str(p) + '_map'] = hg_map
@@ -41,13 +42,13 @@ def get_feature_data(mat_data, feature_name):
 
 
 def process_mat_filename(subject_id, sig_channel, zscore, phon=None,
-                         cluster=False):
-    if cluster:
-        home_path = os.path.expanduser('~')
-        data_dir = home_path + '/workspace/'
-    else:
-        # data_dir = 'data/'
-        data_dir = '../data/'
+                         cluster=False, data_dir=None):
+    if data_dir is None:
+        if cluster:
+            home_path = os.path.expanduser('~')
+            data_dir = home_path + '/workspace/'
+        else:
+            data_dir = 'data/'
     subject_dir = subject_id + '/'
     filename_base = subject_id + '_HG'
     if sig_channel:
