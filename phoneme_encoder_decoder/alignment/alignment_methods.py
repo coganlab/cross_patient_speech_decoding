@@ -69,7 +69,7 @@ class JointPCADecomp:
                     transformations.
         """
         if not self._check_fit():
-            raise RuntimeError('Must fit() before transforming data.')
+            raise RuntimeError('Must call fit() before transforming data.')
         if idx == -1:
             return self._transform_multiple(X)
         if idx >= len(self.transforms):
@@ -148,6 +148,47 @@ class JointPCADecomp:
         return True
 
 
+class CCAAlign():
+
+    def __init__(self, type='class', return_space='b_to_a'):
+        self.type = type
+        self.return_space = return_space
+
+    def fit(self, X_a, X_b, y_a, y_b):
+        L_a, L_b = reshape_latent_dynamics(X_a, X_b, y_a, y_b, type=self.type)
+        M_a, M_b = CCA_align(L_a.T, L_b.T)
+        self.M_a = M_a
+        self.M_b = M_b
+
+    def transform(self, X):
+        if not self._check_fit():
+            raise RuntimeError('Must call fit() before transforming data.')
+        if self.return_space in ['b_to_a', 'a_to_b']:
+            return self._transform_single(X)
+        return self._transform_shared(X)
+
+    def _transform_single(self, X):
+        if self.return_space == 'b_to_a':
+            return X @ self.M_b @ np.linalg.pinv(self.M_a)
+        return X @ self.M_a @ np.linalg.pinv(self.M_b)
+
+    def _transform_shared(self, X):
+        return X[0] @ self.M_a, X[1] @ self.M_b
+
+    def _check_fit(self):
+        """Checks if CCA Aligner has been fit to data.
+
+        Returns:
+            boolean: True if fit() has been called, False otherwise.
+        """
+        try:
+            self.Ma
+            self.Mb
+        except AttributeError:
+            return False
+        return True
+
+
 def get_joint_PCA_transforms(features, labels, n_components=40, dim_red=PCA):
     """Calculates a shared latent space across features from multiple patients
     or recording sessions.
@@ -195,6 +236,10 @@ def get_joint_PCA_transforms(features, labels, n_components=40, dim_red=PCA):
         pt_latent_trans[i] = latent_trans
 
     return (*latent_trans,)
+
+
+def reshape_latent_dynamics(X_a, X_b, y_a, y_b, type='class'):
+    pass
 
 
 def CCA_align_by_class(X_a, X_b, y_a, y_b, return_space='b_to_a'):
