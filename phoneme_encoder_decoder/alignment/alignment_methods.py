@@ -239,7 +239,53 @@ def get_joint_PCA_transforms(features, labels, n_components=40, dim_red=PCA):
 
 
 def reshape_latent_dynamics(X_a, X_b, y_a, y_b, type='class'):
-    pass
+    if type == 'class':
+        L_a, L_b = extract_latent_dynamics_by_class(X_a, X_b, y_a, y_b)
+    elif type == 'trial':
+        L_a, L_b = extract_latent_dynamics_by_trial_subselect(X_a, X_b, y_a,
+                                                              y_b)
+    else:
+        raise ValueError('type must be "class" or "trial".')
+
+    # fold timepoints into trials (isolate latent dimensionality as 2nd dim)
+    L_a, L_b = L_a.reshape(-1, L_a.shape[-1]), L_b.reshape(-1, L_b.shape[-1])
+    return L_a, L_b
+
+
+def extract_latent_dynamics_by_class(X_a, X_b, y_a, y_b):
+    # process labels for easy comparison of label sequences
+    y_a, y_b = label2str(y_a), label2str(y_b)
+    # average trials within class
+    L_a, L_b = cnd_avg(X_a, y_a), cnd_avg(X_b, y_b)
+
+    # only align via shared classes between datasets
+    _, y_shared_a, y_shared_b = np.intersect1d(np.unique(y_a), np.unique(y_b),
+                                               assume_unique=True,
+                                               return_indices=True)
+    L_a, L_b = L_a[y_shared_a], L_b[y_shared_b]
+
+    return L_a, L_b
+
+
+def extract_latent_dynamics_by_trial_subselect(X_a, X_b, y_a, y_b):
+    y_a, y_b = label2str(y_a), label2str(y_b)
+    L_a, L_b = shared_trial_subselect(X_a, X_b, y_a, y_b)
+    return L_a, L_b
+
+
+def shared_trial_subselect(X_a, X_b, y_a, y_b):
+    L_a, L_b = [], []
+    # subselect same amount of trials for each class
+    for c in np.intersect1d(y_a, y_b):
+        # shuffle trial order within class
+        curr_a = np.random.permutation(np.where(y_a == c)[0])
+        curr_b = np.random.permutation(np.where(y_b == c)[0])
+        min_shared = min(curr_a.shape[0], curr_b.shape[0])
+
+        L_a.append(X_a[curr_a[:min_shared]])
+        L_b.append(X_b[curr_b[:min_shared]])
+    L_a, L_b = np.vstack(L_a), np.vstack(L_b)
+    return L_a, L_b
 
 
 def CCA_align_by_class(X_a, X_b, y_a, y_b, return_space='b_to_a'):
