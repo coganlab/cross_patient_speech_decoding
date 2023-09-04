@@ -6,6 +6,7 @@ Cogan & Viventi Labs, Duke University
 
 import numpy as np
 from sklearn.decomposition import PCA
+from functools import reduce
 from utils import cnd_avg, label2str
 
 
@@ -117,7 +118,8 @@ class JointPCADecomp:
         transformed_lst = [0]*len(X)
         for i, (feats, transform) in enumerate(zip(X, self.transforms)):
             transform_feats = feats.reshape(-1, feats.shape[-1]) @ transform
-            transformed_lst[i] = transform_feats.reshape(X.shape[:-1] + (-1,))
+            transformed_lst[i] = transform_feats.reshape(feats.shape[:-1] +
+                                                         (-1,))
         return (*transformed_lst,)
 
     def _transform_single(self, X, idx):
@@ -182,8 +184,8 @@ class CCAAlign():
             boolean: True if fit() has been called, False otherwise.
         """
         try:
-            self.Ma
-            self.Mb
+            self.M_a
+            self.M_b
         except AttributeError:
             return False
         return True
@@ -214,10 +216,19 @@ def get_joint_PCA_transforms(features, labels, n_components=40, dim_red=PCA):
             source. Length will be equal to the length of the input feature
             list.
     """
+    # process labels for easy comparison of label sequences
+    labels = [label2str(labs) for labs in labels]
+
     # condition average firing rates for all datasets
-    cnd_avg_data = []*len(features)
-    for i, feats in enumerate(features):
-        cnd_avg_data[i] = cnd_avg(feats, labels)
+    cnd_avg_data = [0]*len(features)
+    for i, (feats, labs) in enumerate(zip(features, labels)):
+        cnd_avg_data[i] = cnd_avg(feats, labs)
+
+    # only use same conditions across datasets
+    shared_lab = reduce(np.intersect1d, labels)
+    cnd_avg_data = [cnd_avg_data[i][np.isin(np.unique(lab), shared_lab,
+                                            assume_unique=True)] for i, lab
+                    in enumerate(labels)]
 
     # combine all datasets into one matrix (n_conditions x n_timepoints x
     # sum channels)
@@ -231,11 +242,11 @@ def get_joint_PCA_transforms(features, labels, n_components=40, dim_red=PCA):
     # calculate per pt channel -> factor transformation matrices
     pt_latent_trans = [0]*len(cnd_avg_data)
     for i, pt_ca in enumerate(cnd_avg_data):
-        pt_ca = pt_ca.reshape(pt_ca.shape[0], -1)  # isolate channel dim
+        pt_ca = pt_ca.reshape(-1, pt_ca.shape[-1])  # isolate channel dim
         latent_trans = np.linalg.pinv(latent_mat) @ pt_ca  # lst_sq soln
-        pt_latent_trans[i] = latent_trans
+        pt_latent_trans[i] = latent_trans.T
 
-    return (*latent_trans,)
+    return (*pt_latent_trans,)
 
 
 def reshape_latent_dynamics(X_a, X_b, y_a, y_b, type='class'):
