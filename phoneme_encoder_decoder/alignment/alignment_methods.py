@@ -243,8 +243,11 @@ def get_joint_PCA_transforms(features, labels, n_components=40, dim_red=PCA):
     pt_latent_trans = [0]*len(cnd_avg_data)
     for i, pt_ca in enumerate(cnd_avg_data):
         pt_ca = pt_ca.reshape(-1, pt_ca.shape[-1])  # isolate channel dim
-        latent_trans = np.linalg.pinv(latent_mat) @ pt_ca  # lst_sq soln
-        pt_latent_trans[i] = latent_trans.T
+        latent_trans = np.linalg.pinv(pt_ca) @ latent_mat  # lst_sq soln
+        pt_latent_trans[i] = latent_trans
+        # latent_trans = np.linalg.pinv(latent_mat) @ pt_ca  # lst_sq soln
+        # pt_latent_trans[i] = latent_trans.T
+        # pt_latent_trans[i] = np.linalg.pinv(latent_trans)
 
     return (*pt_latent_trans,)
 
