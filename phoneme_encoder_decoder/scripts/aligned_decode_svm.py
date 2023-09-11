@@ -71,18 +71,18 @@ def aligned_decoding():
     joint_dim_red = str2bool(inputs['joint_dim_red'])
 
     # constant params
-    n_iter = 10
+    n_iter = 50
     n_folds = 5
     n_comp = 30
 
     # alignment label type
-    algn_type = 'artic_seq'
-    # algn_type = 'phon_seq'
+    # algn_type = 'artic_seq'
+    algn_type = 'phon_seq'
     algn_grouping = 'class'
 
     # decoding label type
-    # lab_type = 'phon'
-    lab_type = 'artic'
+    lab_type = 'phon'
+    # lab_type = 'artic'
 
     # dimensionality reduction type
     red_method = 'PCA'
@@ -94,12 +94,12 @@ def aligned_decoding():
     else:
         filename_suffix = inputs['suffix']
         if cluster:
-            out_prefix = DATA_PATH + 'outputs/alignment_accs/'
+            out_prefix = DATA_PATH + f'outputs/alignment_accs/{pt}/'
         else:
-            out_prefix = '../acc_data/joint_algn_accs/'
+            out_prefix = f'../acc_data/joint_algn_accs/{pt}/'
         filename = out_prefix + (f"{pt}_{'p' if lab_type == 'phon'else 'a'}"
                                  f"{'All' if p_ind == -1 else p_ind}_"
-                                 f"{filename_suffix}")
+                                 f"{filename_suffix}.pkl")
 
     print('==================================================================')
     print("Training model for patient %s." % pt)
@@ -166,12 +166,15 @@ def aligned_decoding():
                 tar_dr = dim_red(n_components=n_comp)
                 X_tar_train_p = tar_dr.fit_transform(X_tar_train_p)
                 X_tar_test_p = tar_dr.transform(X_tar_test_p)
-                X1, X2, X3, X_tar_train, X_tar_test = [X.reshape(X.shape[0],
+                X1, X2, X3, X_tar_train, X_tar_test = [X.reshape(Xs.shape[0],
                                                                  -1, n_comp)
-                                                       for X in (X1_p, X2_p,
-                                                                 X3_p,
-                                                                 X_tar_train_p,
-                                                                 X_tar_test_p)]
+                                                       for (X, Xs) in
+                                                       zip((X1_p, X2_p, X3_p,
+                                                            X_tar_train_p,
+                                                            X_tar_test_p),
+                                                           (X1, X2, X3,
+                                                            X_tar_train,
+                                                            X_tar_test))]
 
             # align each pooled patient data to target data with CCA
             if cca_align:
