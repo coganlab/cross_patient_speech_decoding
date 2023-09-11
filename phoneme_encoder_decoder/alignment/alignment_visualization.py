@@ -35,8 +35,12 @@ def plot_1D_lat_dyn(t, data, labels, label_names, pt_list, pc_ind=0, n_cols=2,
             min_ylim = np.min(ylims[:, 0])
             max_ylim = np.max(ylims[:, 1])
             plt.setp(ax, ylim=(min_ylim, max_ylim))
-    plt.legend(bbox_to_anchor=(1.25, 1), loc="center right")
+    # plt.legend(bbox_to_anchor=(1.35, 1), loc="center right")
+    handles, labels = ax.get_legend_handles_labels()
+    plt.figlegend(handles, labels, loc='lower center',
+                  ncol=min(10, len(label_names)))
     plt.suptitle(title)
+    f.tight_layout(rect=[0, 0.03, 1, 0.95])
     plt.show()
 
 
