@@ -32,6 +32,8 @@ def init_parser():
                         required=False, help='Use random data for pooling')
     parser.add_argument('-j', '--joint_dim_red', type=str, default='True',
                         required=False, help='Learn joint PCA decomposition')
+    parser.add_argument('-n', '--no_S23', type=str, default='False',
+                        required=False, help='Exclude S23 from pooling')
     parser.add_argument('-c', '--cluster', type=str, default='True',
                         required=False,
                         help='Run on cluster (True) or local (False)')
@@ -72,6 +74,7 @@ def aligned_decoding():
     cca_align = str2bool(inputs['cca_align'])
     random_data = str2bool(inputs['random_data'])
     joint_dim_red = str2bool(inputs['joint_dim_red'])
+    no_S23 = str2bool(inputs['no_S23'])
 
     # constant params
     n_iter = 50
@@ -110,7 +113,9 @@ def aligned_decoding():
     print('Pool train: %s' % pool_train)
     print('Target in train: %s' % tar_in_train)
     print('CCA align: %s' % cca_align)
+    print('Random data: %s' % random_data)
     print('Joint Dim Red: %s' % joint_dim_red)
+    print('No S23: %s' % no_S23)
     print('Alignment type: %s' % algn_type)
     print('Alignment grouping: %s' % algn_grouping)
     print('Label type: %s' % lab_type)
@@ -210,11 +215,15 @@ def aligned_decoding():
                     X_train = np.concatenate((X1, X2, X3), axis=0)
                     y_train = np.concatenate((y1, y2, y3), axis=0)
                 else:
-                    X_train = np.concatenate((X_tar_train, X1, X2, X3), axis=0)
-                    y_train = np.concatenate((y_tar_train, y1, y2, y3), axis=0)
-                    # no S23
-                    # X_train = np.concatenate((X_tar_train, X1, X2), axis=0)
-                    # y_train = np.concatenate((y_tar_train, y1, y2), axis=0)
+                    if no_S23:
+                        X_train = np.concatenate((X_tar_train, X1, X2), axis=0)
+                        y_train = np.concatenate((y_tar_train, y1, y2), axis=0)
+                    else:
+                        X_train = np.concatenate((X_tar_train, X1, X2, X3),
+                                                 axis=0)
+                        y_train = np.concatenate((y_tar_train, y1, y2, y3),
+                                                 axis=0)
+                    
             X_test = X_tar_test
             y_test = y_tar_test
 
