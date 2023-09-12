@@ -28,6 +28,8 @@ def init_parser():
     parser.add_argument('-a', '--cca_align', type=str, default='True',
                         required=False,
                         help='Align pooled data to target data with CCA')
+    parser.add_argument('-r', '--random_data', type=str, default='False',
+                        required=False, help='Use random data for pooling')
     parser.add_argument('-j', '--joint_dim_red', type=str, default='True',
                         required=False, help='Learn joint PCA decomposition')
     parser.add_argument('-c', '--cluster', type=str, default='True',
@@ -68,6 +70,7 @@ def aligned_decoding():
     pool_train = str2bool(inputs['pool_train'])
     tar_in_train = str2bool(inputs['tar_in_train'])
     cca_align = str2bool(inputs['cca_align'])
+    random_data = str2bool(inputs['random_data'])
     joint_dim_red = str2bool(inputs['joint_dim_red'])
 
     # constant params
@@ -126,6 +129,11 @@ def aligned_decoding():
     D1, lab1, lab1_full = pre_data[0]
     D2, lab2, lab2_full = pre_data[1]
     D3, lab3, lab3_full = pre_data[2]
+
+    if random_data:
+        D1 = np.random.rand(*D1.shape)
+        D2 = np.random.rand(*D2.shape)
+        D3 = np.random.rand(*D3.shape)
 
     iter_accs = []
     wrong_trs_iter = []
