@@ -21,16 +21,16 @@ def init_parser():
                         help='Patient ID')
     parser.add_argument('-pi', '--p_ind', type=int, default=-1, required=False,
                         help='Sequence position index')
-    parser.add_argument('-po', '--pool_train', type=str, default='True',
+    parser.add_argument('-po', '--pool_train', type=str, default='False',
                         required=False, help='Pool patient data for training')
     parser.add_argument('-t', '--tar_in_train', type=str, default='True',
                         required=False, help='Include target data in training')
-    parser.add_argument('-a', '--cca_align', type=str, default='True',
+    parser.add_argument('-a', '--cca_align', type=str, default='False',
                         required=False,
                         help='Align pooled data to target data with CCA')
     parser.add_argument('-r', '--random_data', type=str, default='False',
                         required=False, help='Use random data for pooling')
-    parser.add_argument('-j', '--joint_dim_red', type=str, default='True',
+    parser.add_argument('-j', '--joint_dim_red', type=str, default='False',
                         required=False, help='Learn joint PCA decomposition')
     parser.add_argument('-n', '--no_S23', type=str, default='False',
                         required=False, help='Exclude S23 from pooling')
@@ -77,7 +77,7 @@ def aligned_decoding():
     no_S23 = str2bool(inputs['no_S23'])
 
     # constant params
-    n_iter = 50
+    n_iter = 2
     n_folds = 5
     n_comp = 30
 
