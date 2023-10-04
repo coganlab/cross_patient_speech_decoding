@@ -26,8 +26,8 @@ def plot_1D_lat_dyn(t, data, labels, label_names, pt_list, pc_ind=0, n_cols=2,
             to_plot = np.mean(curr_data[j_locs, :, pc_ind], axis=0)
             ax.plot(t, to_plot, label=label_names[j], linewidth=3)
         ylims.append(ax.get_ylim())
-        ax.set_xlabel('Time (s)')
-        ax.set_ylabel(f'PC{pc_ind+1}')
+        ax.set_xlabel('Time Relative to Response Onset (s)', weight='bold')
+        ax.set_ylabel(f'PC{pc_ind+1}', weight='bold', rotation=0, labelpad=20)
         ax.set_title(f'{pt_list[i]}')
     if same_axes:
         for ax in f.axes:
@@ -41,7 +41,54 @@ def plot_1D_lat_dyn(t, data, labels, label_names, pt_list, pc_ind=0, n_cols=2,
                   ncol=min(10, len(label_names)))
     plt.suptitle(title)
     f.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.show()
+    # plt.show()
+
+    return f
+
+
+def plot_2D_lat_dyn(data, labels, label_names, pt_list, n_cols=2,
+                    title='2D Latent Dynamics', figsize=(12, 10), reorder=None,
+                    same_axes=True):
+    n_plots = len(data)
+    f, axs = plt.subplots(nrows=int(np.ceil(n_plots/n_cols)), ncols=n_cols,
+                          figsize=figsize)
+    xlims = []
+    ylims = []
+    for i, ax in enumerate(axs.flat):
+        if reorder is not None:
+            curr_data = data[reorder[i]]
+        else:
+            curr_data = data[i]
+        curr_lab = labels[i]
+        for j, _ in enumerate(np.unique(curr_lab)):
+            j_locs = np.where(curr_lab == j+1)[0]
+            to_plot_x = np.mean(curr_data[j_locs, :, 0], axis=0)
+            to_plot_y = np.mean(curr_data[j_locs, :, 1], axis=0)
+            ax.plot(to_plot_x, to_plot_y, label=label_names[j], linewidth=3)
+            ax.scatter(to_plot_x[0], to_plot_y[0], s=50)
+        xlims.append(ax.get_xlim())
+        ylims.append(ax.get_ylim())
+        ax.set_xlabel('PC 1', weight='bold')
+        ax.set_ylabel('PC 2', weight='bold')
+        ax.set_title(f'{pt_list[i]}')
+    if same_axes:
+        for ax in f.axes:
+            xlims = np.array(xlims)
+            min_xlim = np.min(xlims[:, 0])
+            max_xlim = np.max(xlims[:, 1])
+            ylims = np.array(ylims)
+            min_ylim = np.min(ylims[:, 0])
+            max_ylim = np.max(ylims[:, 1])
+            plt.setp(ax, xlim=(min_xlim, max_xlim), ylim=(min_ylim, max_ylim))
+    # plt.legend(bbox_to_anchor=(1.35, 1), loc="center right")
+    handles, labels = ax.get_legend_handles_labels()
+    # plt.figlegend(handles, labels, loc='lower center',
+    #               ncol=min(10, len(label_names)))
+    plt.suptitle(title)
+    f.tight_layout(rect=[0, 0.03, 1, 0.95])
+    # plt.show()
+
+    return f
 
 
 def plot_3D_lat_dyn(data, labels, label_names, pt_list,
@@ -87,7 +134,9 @@ def plot_3D_lat_dyn(data, labels, label_names, pt_list,
 
     plt.legend(bbox_to_anchor=(1.4, 1), loc="center right")
     plt.suptitle(title)
-    plt.show()
+    # plt.show()
+
+    return f
 
 
 def arrange_subplots(n):
