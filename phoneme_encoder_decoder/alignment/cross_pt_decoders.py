@@ -7,7 +7,27 @@ import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.decomposition import PCA
 
-class crossPtDecoder_sepDimRed(BaseEstimator):
+class crossPtDecoder(BaseEstimator):
+
+    def preprocess_train(self, X, y=None):
+        pass
+
+    def preprocess_test(self, X, y=None):
+        pass
+
+    def fit(self, X, y):
+        X_p, y_p = self.preprocess_train(X, y)
+        return self.decoder.fit(X_p, y_p)
+    
+    def predict(self, X):
+        X_p = self.preprocess_test(X)
+        return self.decoder.predict(X_p)
+    
+    def score(self, X, y, **kwargs):
+        X_p = self.preprocess_test(X)
+        return self.decoder.score(X_p, y, **kwargs)
+
+class crossPtDecoder_sepDimRed(crossPtDecoder):
     """ Cross-Patient Decoder with separate PCA for each patient. """
     
     def __init__(self, cross_pt_data, decoder, dim_red=PCA, n_comp=10):
@@ -47,15 +67,3 @@ class crossPtDecoder_sepDimRed(BaseEstimator):
         X_r = X.reshape(-1, X.shape[-1])
         X_dr =  self.tar_dr.transform(X_r)
         return X_dr.reshape(X.shape[0], -1)
-        
-    def fit(self, X, y):
-        X_dr, y_dr = self.preprocess_train(X, y)
-        return self.decoder.fit(X_dr, y_dr)
-    
-    def predict(self, X):
-        X_dr = self.preprocess_test(X)
-        return self.decoder.predict(X_dr)
-    
-    def score(self, X, y, **kwargs):
-        X_dr = self.preprocess_test(X)
-        return self.decoder.score(X_dr, y, **kwargs)
