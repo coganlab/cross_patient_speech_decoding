@@ -3,6 +3,7 @@ import sys
 import os
 import argparse
 import numpy as np
+from sklearn.base import BaseEstimator
 from sklearn.model_selection import (StratifiedKFold, GridSearchCV,
                                      RandomizedSearchCV)
 from sklearn.decomposition import PCA
@@ -14,6 +15,8 @@ from sklearn.pipeline import Pipeline
 sys.path.insert(0, '..')
 
 from alignment.alignment_methods import JointPCADecomp, CCAAlign
+from alignment.cross_pt_decoders import (crossPtDecoder_sepDimRed,
+                                         crossPtDecoder_sepAlign)
 import alignment.utils as utils
 
 
@@ -52,6 +55,29 @@ def str2bool(s):
     return s.lower() == 'true'
 
 
+class DimRedReshape(BaseEstimator):
+
+    def __init__(self, dim_red, n_components=10):
+        self.dim_red = dim_red
+        self.n_components = n_components
+
+    def fit(self, X, y=None):
+        X_r = X.reshape(-1, X.shape[-1])
+        self.transformer = self.dim_red(n_components=self.n_components)
+        self.transformer.fit(X_r)
+        return self
+
+    def transform(self, X, y=None):
+        X_r = X.reshape(-1, X.shape[-1])
+        X_dr = self.transformer.transform(X_r)
+        X_dr = X_dr.reshape(X.shape[0], -1)
+        return X_dr
+
+    def fit_transform(self, X, y=None):
+        self.fit(X)
+        return self.transform(X)
+
+
 def aligned_decoding():
     parser = init_parser()
     args = parser.parse_args()
@@ -79,14 +105,17 @@ def aligned_decoding():
     no_S23 = str2bool(inputs['no_S23'])
 
     # constant params
-    n_iter = 2
+    n_iter = 1
     n_folds = 5
 
     # CV GRID
-    param_grid = {'n_comp': [10, 20, 30, 40, 50],
-                  'decoder__estimator__C': [0.1, 1, 10, 100]}
-    param_grid_single = {'dim_red__n_compoennts': [10, 20, 30, 40, 50],
-                         'decoder__C': [0.1, 1, 10, 100]}
+    # param_grid = {'n_comp': [10, 20, 30, 40, 50],
+    #               'decoder__estimator__C': [0.1, 1, 10, 100]}
+    param_grid = {'n_comp': [40, 50]}
+    # param_grid_single = {'dim_red__n_components': [10, 20, 30, 40, 50],
+    #                      'decoder__C': [0.1, 1, 10, 100]}
+    param_grid_single = {'dim_red__n_components': [40, 50],
+                         'decoder__estimator__C': [0.1, 100]}
     ###################
 
     # alignment label type
@@ -110,7 +139,7 @@ def aligned_decoding():
         if cluster:
             out_prefix = DATA_PATH + f'outputs/alignment_accs/{pt}/'
         else:
-            out_prefix = f'../acc_data/joint_algn_accs/{pt}/'
+            out_prefix = f'../acc_data/ncv_accs/{pt}/'
         filename = out_prefix + (f"{pt}_{'p' if lab_type == 'phon'else 'a'}"
                                  f"{'All' if p_ind == -1 else p_ind}_"
                                  f"{filename_suffix}.pkl")
@@ -181,7 +210,7 @@ def aligned_decoding():
                     model = crossPtDecoder_sepDimRed(cross_pt_data, clf,
                                                      dim_red=dim_red)
                 search = GridSearchCV(model, param_grid, cv=cv,
-                                      verbose=5)
+                                      verbose=5, n_jobs=-1)
                 # search = RandomizedSearchCV(model, param_grid,
                 #                             n_iter=5, cv=cv, n_jobs=-1,
                 #                             verbose=1)
@@ -193,10 +222,10 @@ def aligned_decoding():
                       f'Best Score: {search.best_score_}')
                 y_pred = search.predict(D_tar_test)
             else:
-                model = Pipeline([('dim_red', dim_red()),
+                model = Pipeline([('dim_red', DimRedReshape(dim_red)),
                                   ('decoder', clf)])
                 search = GridSearchCV(model, param_grid_single, cv=cv,
-                                      verbose=5)
+                                      verbose=5, n_jobs=-1)
                 search.fit(D_tar_train, lab_tar_train)
                 print(f'Best Params: {search.best_params_},'
                       f'Best Score: {search.best_score_}')

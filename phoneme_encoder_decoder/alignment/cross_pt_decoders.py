@@ -38,9 +38,8 @@ class crossPtDecoder_sepDimRed(crossPtDecoder):
         self.dim_red = dim_red
         self.n_comp = n_comp
 
-    def preprocess_train(self, X, y):
+    def preprocess_train(self, X, y, **kwargs):
         cross_pt_trials = [x.shape[0] for x, _, _ in self.cross_pt_data]
-        tar_trials = X.shape[0]
         # reshape features to be 2D (preserve last dimension for reduction)
         X_cross_r = [x.reshape(-1, x.shape[-1]) for x, _, _ in
                      self.cross_pt_data]
