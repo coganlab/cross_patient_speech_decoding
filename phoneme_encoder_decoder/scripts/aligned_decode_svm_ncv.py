@@ -105,17 +105,17 @@ def aligned_decoding():
     no_S23 = str2bool(inputs['no_S23'])
 
     # constant params
-    n_iter = 1
+    n_iter = 25
     n_folds = 5
 
     # CV GRID
-    # param_grid = {'n_comp': [10, 20, 30, 40, 50],
-    #               'decoder__estimator__C': [0.1, 1, 10, 100]}
-    param_grid = {'n_comp': [40, 50]}
-    # param_grid_single = {'dim_red__n_components': [10, 20, 30, 40, 50],
-    #                      'decoder__C': [0.1, 1, 10, 100]}
-    param_grid_single = {'dim_red__n_components': [40, 50],
-                         'decoder__estimator__C': [0.1, 100]}
+    param_grid = {'n_comp': [10, 20, 30, 40, 50],
+                  'decoder__estimator__C': [0.1, 1, 10, 100]}
+    # param_grid = {'n_comp': [40, 50]}
+    param_grid_single = {'dim_red__n_components': [10, 20, 30, 40, 50],
+                         'decoder__estimator__C': [0.1, 1, 10, 100]}
+    # param_grid_single = {'dim_red__n_components': [40, 50],
+    #                      'decoder__estimator__C': [0.1, 100]}
     ###################
 
     # alignment label type
@@ -253,7 +253,7 @@ def aligned_decoding():
                           'tar_in_train': tar_in_train, 'cca_align': cca_align,
                           'joint_dim_red': joint_dim_red, 'n_iter': n_iter,
                           'n_folds': n_folds,
-                          'params': param_grid,
+                          'hyperparams': param_grid,
                           'algn_type': algn_type,
                           'algn_grouping': algn_grouping,
                           'lab_type': lab_type, 'red_method': red_method,
