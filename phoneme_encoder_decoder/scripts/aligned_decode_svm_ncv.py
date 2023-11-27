@@ -5,12 +5,14 @@ import argparse
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.model_selection import (StratifiedKFold, GridSearchCV,
-                                     RandomizedSearchCV)
+                                     train_test_split)
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import balanced_accuracy_score
 from sklearn.svm import SVC
 from sklearn.ensemble import BaggingClassifier
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import make_pipeline, Pipeline
+from skopt import BayesSearchCV
 
 sys.path.insert(0, '..')
 
@@ -39,6 +41,9 @@ def init_parser():
                         required=False, help='Learn joint PCA decomposition')
     parser.add_argument('-n', '--no_S23', type=str, default='False',
                         required=False, help='Exclude S23 from pooling')
+    parser.add_argument('-tss', '--trial_subsample', type=float, default=1.0,
+                        required=False, help='Fraction of trials to subsample'
+                        'from training data')
     parser.add_argument('-c', '--cluster', type=str, default='True',
                         required=False,
                         help='Run on cluster (True) or local (False)')
@@ -103,24 +108,34 @@ def aligned_decoding():
     random_data = str2bool(inputs['random_data'])
     joint_dim_red = str2bool(inputs['joint_dim_red'])
     no_S23 = str2bool(inputs['no_S23'])
+    tr_subsamp_r = inputs['trial_subsample']
 
     # constant params
     n_iter = 25
     n_folds = 5
 
     # CV GRID
-    param_grid = {'n_comp': [10, 20, 30, 40, 50],
-                  'decoder__estimator__C': [0.1, 1, 10, 100]}
+    param_grid = {
+        'n_comp': (10, 50),
+        'decoder__baggingclassifier__estimator__C': (1e-6, 1e1, 'log-uniform'),
+                 }
+    # param_grid = {'n_comp': [10, 20, 30, 40, 50],
+    #               'decoder__estimator__C': [0.1, 1, 10, 100]}
     # param_grid = {'n_comp': [40, 50]}
-    param_grid_single = {'dim_red__n_components': [10, 20, 30, 40, 50],
-                         'decoder__estimator__C': [0.1, 1, 10, 100]}
+
+    param_grid_single = {
+        'dim_red__n_components': (10, 50),
+        'decoder__estimator__C': (1e-6, 1e1, 'log-uniform'),
+                        }
+    # param_grid_single = {'dim_red__n_components': [10, 20, 30, 40, 50],
+    #                      'decoder__estimator__C': [0.1, 1, 10, 100]}
     # param_grid_single = {'dim_red__n_components': [40, 50],
     #                      'decoder__estimator__C': [0.1, 100]}
     ###################
 
     # alignment label type
-    # algn_type = 'artic_seq'
-    algn_type = 'phon_seq'
+    algn_type = 'artic_seq'
+    # algn_type = 'phon_seq'
     algn_grouping = 'class'
 
     # decoding label type
@@ -158,6 +173,7 @@ def aligned_decoding():
     print('Label type: %s' % lab_type)
     print('Reduction method: %s' % red_method)
     # print('Reduction components: %d' % n_comp)
+    print('Trial subsampling ratio: %f' % inputs['trial_subsample'])
     print('Number of iterations: %d' % n_iter)
     print('Number of folds: %d' % n_folds)
     print('==================================================================')
@@ -191,9 +207,22 @@ def aligned_decoding():
             lab_tar_train, lab_tar_test = lab_tar[train_idx], lab_tar[test_idx]
             lab_tar_full_train, lab_tar_full_test = (lab_tar_full[train_idx],
                                                      lab_tar_full[test_idx])
+            
+            if tr_subsamp_r < 1:
+                # train test split to subsample training data with stratification
+                # (could also use np.random.choice for non-stratified subsampling)
+                D_tar_train, _, lab_tar_train, _, lab_tar_full_train, _ = (
+                                    train_test_split(D_tar_train,
+                                                    lab_tar_train,
+                                                    lab_tar_full_train,
+                                                    train_size=tr_subsamp_r,
+                                                    stratify=lab_tar_train,
+                                                    shuffle=True))
 
-            clf = BaggingClassifier(estimator=SVC(kernel='linear'),
-                                    n_estimators=10)
+
+            clf = make_pipeline(StandardScaler(), BaggingClassifier(
+                                                estimator=SVC(kernel='linear'),
+                                                n_estimators=10))
 
             if pool_train:
                 if no_S23:
@@ -209,13 +238,13 @@ def aligned_decoding():
                 else:
                     model = crossPtDecoder_sepDimRed(cross_pt_data, clf,
                                                      dim_red=dim_red)
-                search = GridSearchCV(model, param_grid, cv=cv,
-                                      verbose=5, n_jobs=-1)
+                # search = GridSearchCV(model, param_grid, cv=cv,
+                #                       verbose=5, n_jobs=-1)
                 # search = RandomizedSearchCV(model, param_grid,
                 #                             n_iter=5, cv=cv, n_jobs=-1,
                 #                             verbose=1)
-                # search = BayesSearchCV(model, param_grid, n_iter=10, cv=cv,
-                #                        verbose=5, n_jobs=-1, n_points=5)
+                search = BayesSearchCV(model, param_grid, n_iter=10, cv=cv,
+                                       verbose=5, n_jobs=-1, n_points=5)
                 search.fit(D_tar_train, lab_tar_train,
                            y_align=lab_tar_full_train)
                 print(f'Best Params: {search.best_params_},'
@@ -224,8 +253,10 @@ def aligned_decoding():
             else:
                 model = Pipeline([('dim_red', DimRedReshape(dim_red)),
                                   ('decoder', clf)])
-                search = GridSearchCV(model, param_grid_single, cv=cv,
-                                      verbose=5, n_jobs=-1)
+                # search = GridSearchCV(model, param_grid_single, cv=cv,
+                #                       verbose=5, n_jobs=-1)
+                search = BayesSearchCV(model, param_grid_single, n_iter=10,
+                                       cv=cv, verbose=5, n_jobs=-1, n_points=5)
                 search.fit(D_tar_train, lab_tar_train)
                 print(f'Best Params: {search.best_params_},'
                       f'Best Score: {search.best_score_}')
