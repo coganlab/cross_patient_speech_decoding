@@ -67,15 +67,17 @@ class DimRedReshape(BaseEstimator):
         self.n_components = n_components
 
     def fit(self, X, y=None):
-        X_r = X.reshape(-1, X.shape[-1])
+        # X_r = X.reshape(-1, X.shape[-1])
+        X_r = X.reshape(X.shape[0], -1)
         self.transformer = self.dim_red(n_components=self.n_components)
         self.transformer.fit(X_r)
         return self
 
     def transform(self, X, y=None):
-        X_r = X.reshape(-1, X.shape[-1])
+        # X_r = X.reshape(-1, X.shape[-1])
+        X_r = X.reshape(X.shape[0], -1)
         X_dr = self.transformer.transform(X_r)
-        X_dr = X_dr.reshape(X.shape[0], -1)
+        # X_dr = X_dr.reshape(X.shape[0], -1)
         return X_dr
 
     def fit_transform(self, X, y=None):
@@ -117,6 +119,7 @@ def aligned_decoding():
     # CV GRID
     param_grid = {
         'n_comp': (10, 50),
+        'decoder__dimredreshape__n_components': (0.1, 0.95, 'uniform'),
         'decoder__baggingclassifier__estimator__C': (1e-6, 1e1, 'log-uniform'),
                  }
     # param_grid = {'n_comp': [10, 20, 30, 40, 50],
@@ -124,8 +127,9 @@ def aligned_decoding():
     # param_grid = {'n_comp': [40, 50]}
 
     param_grid_single = {
-        'dim_red__n_components': (10, 50),
-        'decoder__baggingclassifier__estimator__C': (1e-6, 1e1, 'log-uniform'),
+        # 'dim_red__n_components': (10, 50),
+        'dimredreshape__n_components': (0.1, 0.95, 'uniform'),
+        'baggingclassifier__estimator__C': (1e-6, 1e1, 'log-uniform'),
                         }
     # param_grid_single = {'dim_red__n_components': [10, 20, 30, 40, 50],
     #                      'decoder__estimator__C': [0.1, 1, 10, 100]}
@@ -220,7 +224,8 @@ def aligned_decoding():
                                                     shuffle=True))
 
 
-            clf = make_pipeline(StandardScaler(), BaggingClassifier(
+            clf = make_pipeline(DimRedReshape(dim_red, n_components=0.8),
+                                BaggingClassifier(
                                                 estimator=SVC(kernel='linear'),
                                                 n_estimators=10))
 
@@ -251,11 +256,11 @@ def aligned_decoding():
                       f'Best Score: {search.best_score_}')
                 y_pred = search.predict(D_tar_test)
             else:
-                model = Pipeline([('dim_red', DimRedReshape(dim_red)),
-                                  ('decoder', clf)])
+                # model = Pipeline([('dim_red', DimRedReshape(dim_red)),
+                #                   ('decoder', clf)])
                 # search = GridSearchCV(model, param_grid_single, cv=cv,
                 #                       verbose=5, n_jobs=-1)
-                search = BayesSearchCV(model, param_grid_single, n_iter=10,
+                search = BayesSearchCV(clf, param_grid_single, n_iter=10,
                                        cv=cv, verbose=5, n_jobs=-1, n_points=5)
                 search.fit(D_tar_train, lab_tar_train)
                 print(f'Best Params: {search.best_params_},'
