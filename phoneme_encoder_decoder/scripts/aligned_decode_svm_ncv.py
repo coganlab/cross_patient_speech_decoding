@@ -125,7 +125,7 @@ def aligned_decoding():
 
     param_grid_single = {
         'dim_red__n_components': (10, 50),
-        'decoder__estimator__C': (1e-6, 1e1, 'log-uniform'),
+        'decoder__baggingclassifier__estimator__C': (1e-6, 1e1, 'log-uniform'),
                         }
     # param_grid_single = {'dim_red__n_components': [10, 20, 30, 40, 50],
     #                      'decoder__estimator__C': [0.1, 1, 10, 100]}
