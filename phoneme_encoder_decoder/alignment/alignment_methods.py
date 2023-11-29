@@ -7,7 +7,7 @@ Cogan & Viventi Labs, Duke University
 import numpy as np
 from sklearn.decomposition import PCA
 from functools import reduce
-from .utils import cnd_avg, label2str
+from utils import cnd_avg, label2str
 
 
 class JointPCADecomp:
