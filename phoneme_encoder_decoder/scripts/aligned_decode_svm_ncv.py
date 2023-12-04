@@ -113,14 +113,16 @@ def aligned_decoding():
     tr_subsamp_r = inputs['trial_subsample']
 
     # constant params
-    n_iter = 25
+    n_iter = 50
     n_folds = 5
 
     # CV GRID
     param_grid = {
-        'n_comp': (10, 50),
-        'decoder__dimredreshape__n_components': (0.1, 0.95, 'uniform'),
-        'decoder__baggingclassifier__estimator__C': (1e-6, 1e1, 'log-uniform'),
+        # 'n_comp': (10, 50),
+        'n_comp': [30],
+        # 'decoder__dimredreshape__n_components': (0.1, 0.95, 'uniform'),
+        'decoder__dimredreshape__n_components': [0.8],
+        # 'decoder__baggingclassifier__estimator__C': (1e-6, 1e1, 'log-uniform'),
                  }
     # param_grid = {'n_comp': [10, 20, 30, 40, 50],
     #               'decoder__estimator__C': [0.1, 1, 10, 100]}
@@ -128,8 +130,9 @@ def aligned_decoding():
 
     param_grid_single = {
         # 'dim_red__n_components': (10, 50),
-        'dimredreshape__n_components': (0.1, 0.95, 'uniform'),
-        'baggingclassifier__estimator__C': (1e-6, 1e1, 'log-uniform'),
+        # 'dimredreshape__n_components': (0.1, 0.95, 'uniform'),
+        'dimredreshape__n_components': [0.8],
+        # 'baggingclassifier__estimator__C': (1e-6, 1e1, 'log-uniform'),
                         }
     # param_grid_single = {'dim_red__n_components': [10, 20, 30, 40, 50],
     #                      'decoder__estimator__C': [0.1, 1, 10, 100]}
@@ -248,8 +251,10 @@ def aligned_decoding():
                 # search = RandomizedSearchCV(model, param_grid,
                 #                             n_iter=5, cv=cv, n_jobs=-1,
                 #                             verbose=1)
-                search = BayesSearchCV(model, param_grid, n_iter=10, cv=cv,
-                                       verbose=5, n_jobs=-1, n_points=5)
+                # search = BayesSearchCV(model, param_grid, n_iter=10, cv=cv,
+                #                        verbose=5, n_jobs=-1, n_points=5)
+                search = BayesSearchCV(model, param_grid, cv=cv, verbose=5,
+                                       n_jobs=-1, n_iter=1)
                 search.fit(D_tar_train, lab_tar_train,
                            y_align=lab_tar_full_train)
                 print(f'Best Params: {search.best_params_},'
@@ -260,8 +265,8 @@ def aligned_decoding():
                 #                   ('decoder', clf)])
                 # search = GridSearchCV(model, param_grid_single, cv=cv,
                 #                       verbose=5, n_jobs=-1)
-                search = BayesSearchCV(clf, param_grid_single, n_iter=10,
-                                       cv=cv, verbose=5, n_jobs=-1, n_points=5)
+                search = BayesSearchCV(model, param_grid_single, cv=cv,
+                                       verbose=5, n_jobs=-1, n_iter=1)
                 search.fit(D_tar_train, lab_tar_train)
                 print(f'Best Params: {search.best_params_},'
                       f'Best Score: {search.best_score_}')
