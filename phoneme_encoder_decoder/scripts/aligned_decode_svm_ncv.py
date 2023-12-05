@@ -253,7 +253,7 @@ def aligned_decoding():
                 #                             verbose=1)
                 # search = BayesSearchCV(model, param_grid, n_iter=10, cv=cv,
                 #                        verbose=5, n_jobs=-1, n_points=5)
-                search = BayesSearchCV(model, param_grid, cv=cv, verbose=5,
+                search = BayesSearchCV(model, param_grid, cv=5, verbose=5,
                                        n_jobs=-1, n_iter=1)
                 search.fit(D_tar_train, lab_tar_train,
                            y_align=lab_tar_full_train)
@@ -263,9 +263,9 @@ def aligned_decoding():
             else:
                 # model = Pipeline([('dim_red', DimRedReshape(dim_red)),
                 #                   ('decoder', clf)])
-                # search = GridSearchCV(model, param_grid_single, cv=cv,
+                # search = GridSearchCV(clf, param_grid_single, cv=cv,
                 #                       verbose=5, n_jobs=-1)
-                search = BayesSearchCV(model, param_grid_single, cv=cv,
+                search = BayesSearchCV(clf, param_grid_single, cv=3,
                                        verbose=5, n_jobs=-1, n_iter=1)
                 search.fit(D_tar_train, lab_tar_train)
                 print(f'Best Params: {search.best_params_},'
