@@ -141,8 +141,8 @@ def aligned_decoding():
     ###################
 
     # alignment label type
-    algn_type = 'artic_seq'
-    # algn_type = 'phon_seq'
+    # algn_type = 'artic_seq'
+    algn_type = 'phon_seq'
     algn_grouping = 'class'
 
     # decoding label type
@@ -227,9 +227,13 @@ def aligned_decoding():
                                                     shuffle=True))
 
 
+            # clf = make_pipeline(DimRedReshape(dim_red, n_components=0.8),
+            #                     BaggingClassifier(
+            #                                     estimator=SVC(kernel='linear'),
+            #                                     n_estimators=10))
             clf = make_pipeline(DimRedReshape(dim_red, n_components=0.8),
                                 BaggingClassifier(
-                                                estimator=SVC(kernel='linear'),
+                                                estimator=SVC(kernel='rbf'),
                                                 n_estimators=10))
 
             if pool_train:
