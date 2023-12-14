@@ -18,7 +18,8 @@ sys.path.insert(0, '..')
 
 from alignment.alignment_methods import JointPCADecomp, CCAAlign
 from alignment.cross_pt_decoders import (crossPtDecoder_sepDimRed,
-                                         crossPtDecoder_sepAlign)
+                                         crossPtDecoder_sepAlign,
+                                         crossPtDecoder_jointDimRed)
 import alignment.utils as utils
 
 
@@ -153,6 +154,12 @@ def aligned_decoding():
     red_method = 'PCA'
     dim_red = PCA
 
+    # check alignment type
+    if joint_dim_red and cca_align:
+        print('Both joint_dim_red and cca_align are True. Using joint_dim_red '
+              'to perform alignment.')
+        cca_align = False
+
     # decoding run filename
     if inputs['filename'] != '':
         filename = inputs['filename']
@@ -244,7 +251,10 @@ def aligned_decoding():
                     cross_pt_data = [(D1, lab1, lab1_full),
                                      (D2, lab2, lab2_full),
                                      (D3, lab3, lab3_full)]
-                if cca_align:
+                if joint_dim_red:
+                    model = crossPtDecoder_jointDimRed(cross_pt_data, clf,
+                                                       JointPCADecomp)
+                elif cca_align:
                     model = crossPtDecoder_sepAlign(cross_pt_data, clf,
                                                     CCAAlign, dim_red=dim_red)
                 else:
