@@ -151,9 +151,10 @@ class crossPtDecoder_jointDimRed(crossPtDecoder):
 
         # joint dimensionality reduction
         self.joint_dr = self.joint_dr_method(n_components=self.n_comp)
-        X_tar_dr, X_algn_dr = self.joint_dr.fit_transform(
+        X_joint_dr = self.joint_dr.fit_transform(
                                                 [X] + X_cross,
                                                 [y_align] + y_align_cross)
+        X_tar_dr, X_algn_dr = X_joint_dr[0], X_joint_dr[1:]
         
         # reshape to trialx x features
         X_algn_dr = [x.reshape(x.shape[0], -1) for x in X_algn_dr]
