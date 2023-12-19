@@ -119,12 +119,14 @@ def aligned_decoding():
 
     # CV GRID
     param_grid = {
-        # 'n_comp': (10, 50),
-        'n_comp': [30],
-        # 'decoder__dimredreshape__n_components': (0.1, 0.95, 'uniform'),
-        'decoder__dimredreshape__n_components': [0.8],
-        # 'decoder__baggingclassifier__estimator__C': (1e-6, 1e1, 'log-uniform'),
-                 }
+        'n_comp': (10, 50),
+        # 'n_comp': [30],
+        'decoder__dimredreshape__n_components': (0.1, 0.95, 'uniform'),
+        # 'decoder__dimredreshape__n_components': [0.8],
+        'decoder__baggingclassifier__estimator__C': (1e-3, 1e5, 'log-uniform'),
+        'decoder__baggingclassifier__estimator__gamma': (1e-4, 1e3, 'log-uniform'),
+        'decoder__baggingclassifier__n_estimators': (10, 100),
+        }
     # param_grid = {'n_comp': [10, 20, 30, 40, 50],
     #               'decoder__estimator__C': [0.1, 1, 10, 100]}
     # param_grid = {'n_comp': [40, 50]}
@@ -207,6 +209,20 @@ def aligned_decoding():
         D2 = np.random.rand(*D2.shape)
         D3 = np.random.rand(*D3.shape)
 
+    # define classifier
+    decoder = SVC(
+        # kernel='linear',
+        kernel='rbf',
+        class_weight='balanced',
+        )
+    clf = make_pipeline(
+                DimRedReshape(dim_red, n_components=0.8),
+                BaggingClassifier(
+                    estimator=decoder,
+                    # n_estimators=10
+                    )
+                )
+
     iter_accs = []
     wrong_trs_iter = []
     y_true_iter, y_pred_iter = [], []
@@ -231,17 +247,7 @@ def aligned_decoding():
                                                     lab_tar_full_train,
                                                     train_size=tr_subsamp_r,
                                                     stratify=lab_tar_train,
-                                                    shuffle=True))
-
-
-            # clf = make_pipeline(DimRedReshape(dim_red, n_components=0.8),
-            #                     BaggingClassifier(
-            #                                     estimator=SVC(kernel='linear'),
-            #                                     n_estimators=10))
-            clf = make_pipeline(DimRedReshape(dim_red, n_components=0.8),
-                                BaggingClassifier(
-                                                estimator=SVC(kernel='rbf'),
-                                                n_estimators=10))
+                                                    shuffle=True))    
 
             if pool_train:
                 if no_S23:
@@ -265,10 +271,10 @@ def aligned_decoding():
                 # search = RandomizedSearchCV(model, param_grid,
                 #                             n_iter=5, cv=cv, n_jobs=-1,
                 #                             verbose=1)
-                # search = BayesSearchCV(model, param_grid, n_iter=10, cv=cv,
-                #                        verbose=5, n_jobs=-1, n_points=5)
-                search = BayesSearchCV(model, param_grid, cv=5, verbose=5,
-                                       n_jobs=-1, n_iter=1)
+                search = BayesSearchCV(model, param_grid, n_iter=25, cv=cv,
+                                       verbose=5, n_jobs=-1, n_points=5)
+                # search = BayesSearchCV(model, param_grid, cv=5, verbose=5,
+                #                        n_jobs=-1, n_iter=1)
                 search.fit(D_tar_train, lab_tar_train,
                            y_align=lab_tar_full_train)
                 print(f'Best Params: {search.best_params_},'
