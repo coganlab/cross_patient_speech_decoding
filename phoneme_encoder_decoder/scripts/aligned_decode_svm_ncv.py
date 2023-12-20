@@ -117,7 +117,7 @@ def aligned_decoding():
     do_cv = str2bool(inputs['cross_validate'])
 
     # constant params
-    n_iter = 5
+    n_iter = 50
     n_folds = 5
 
     ###### CV GRID ######
@@ -283,13 +283,13 @@ def aligned_decoding():
 
                     # need to call fit with the extra kwarg, so set refit to
                     # False and call fit manually after finding params
-                    search = BayesSearchCV(model, param_grid, n_iter=2, cv=cv,
-                                        verbose=5, n_jobs=-1, n_points=1,
-                                        refit=False)
+                    search = BayesSearchCV(model, param_grid, n_iter=25, cv=cv,
+                                          verbose=5, n_jobs=-1, n_points=5,
+                                          refit=False)
                     search.fit(D_tar_train, lab_tar_train,
-                            y_align=lab_tar_full_train)
+                               y_align=lab_tar_full_train)
                     print(f'Best Params: {search.best_params_},'
-                        f'Best Score: {search.best_score_}')
+                          f'Best Score: {search.best_score_}')
                     best_params = search.best_params_
                 else:
                     # if not doing CV
