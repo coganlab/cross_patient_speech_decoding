@@ -280,19 +280,26 @@ def aligned_decoding():
                     # search = RandomizedSearchCV(model, param_grid,
                     #                             n_iter=5, cv=cv, n_jobs=-1,
                     #                             verbose=1)
+
+                    # need to call fit with the extra kwarg, so set refit to
+                    # False and call fit manually after finding params
                     search = BayesSearchCV(model, param_grid, n_iter=2, cv=cv,
-                                        verbose=5, n_jobs=-1, n_points=1)
+                                        verbose=5, n_jobs=-1, n_points=1,
+                                        refit=False)
                     search.fit(D_tar_train, lab_tar_train,
                             y_align=lab_tar_full_train)
                     print(f'Best Params: {search.best_params_},'
                         f'Best Score: {search.best_score_}')
-                    y_pred = search.predict(D_tar_test)
+                    best_params = search.best_params_
                 else:
                     # if not doing CV
-                    model.set_params(**param_grid)
-                    model.fit(D_tar_train, lab_tar_train,
-                            y_align=lab_tar_full_train)
-                    y_pred = model.predict(D_tar_test)
+                    best_params = param_grid
+
+                # manually fit model with best params (see note in CV section)
+                model.set_params(**best_params)
+                model.fit(D_tar_train, lab_tar_train,
+                        y_align=lab_tar_full_train)
+                y_pred = model.predict(D_tar_test)
             else:
                 # nested cross-validation
                 if do_cv:
@@ -301,16 +308,20 @@ def aligned_decoding():
                     # search = GridSearchCV(clf, param_grid_single, cv=cv,
                     #                       verbose=5, n_jobs=-1)
                     search = BayesSearchCV(clf, param_grid_single, cv=3,
-                                        verbose=5, n_jobs=-1, n_iter=1)
+                                        verbose=5, n_jobs=-1, n_iter=1,
+                                        refit=False)
                     search.fit(D_tar_train, lab_tar_train)
                     print(f'Best Params: {search.best_params_},'
                         f'Best Score: {search.best_score_}')
-                    y_pred = search.predict(D_tar_test)
+                    best_params = search.best_params_
                 else:
                     # if not doing CV
-                    clf.set_params(**param_grid_single)
-                    clf.fit(D_tar_train, lab_tar_train)
-                    y_pred = clf.predict(D_tar_test)
+                    best_params = param_grid_single
+
+                # manually fit model with best params (see note in CV section)
+                clf.set_params(**best_params)
+                clf.fit(D_tar_train, lab_tar_train)
+                y_pred = clf.predict(D_tar_test)
 
             y_test = lab_tar_test
             y_true_all.extend(y_test)
