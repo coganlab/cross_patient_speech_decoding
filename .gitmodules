@@ -1,0 +1,3 @@
+[submodule "IEEG_Pipelines"]
+	path = IEEG_Pipelines
+	url = git@github.com:coganlab/IEEG_Pipelines.git
