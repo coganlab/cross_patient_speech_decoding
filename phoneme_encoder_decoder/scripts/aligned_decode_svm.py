@@ -77,7 +77,7 @@ def aligned_decoding():
     no_S23 = str2bool(inputs['no_S23'])
 
     # constant params
-    n_iter = 2
+    n_iter = 50
     n_folds = 5
     n_comp = 30
 

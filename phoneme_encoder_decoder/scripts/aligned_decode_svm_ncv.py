@@ -5,18 +5,21 @@ import argparse
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.model_selection import (StratifiedKFold, GridSearchCV,
-                                     RandomizedSearchCV)
+                                     train_test_split)
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import balanced_accuracy_score
 from sklearn.svm import SVC
 from sklearn.ensemble import BaggingClassifier
-from sklearn.pipeline import Pipeline
+from sklearn.pipeline import make_pipeline, Pipeline
+from skopt import BayesSearchCV
 
 sys.path.insert(0, '..')
 
 from alignment.alignment_methods import JointPCADecomp, CCAAlign
 from alignment.cross_pt_decoders import (crossPtDecoder_sepDimRed,
-                                         crossPtDecoder_sepAlign)
+                                         crossPtDecoder_sepAlign,
+                                         crossPtDecoder_jointDimRed)
 import alignment.utils as utils
 
 
@@ -39,9 +42,14 @@ def init_parser():
                         required=False, help='Learn joint PCA decomposition')
     parser.add_argument('-n', '--no_S23', type=str, default='False',
                         required=False, help='Exclude S23 from pooling')
+    parser.add_argument('-tss', '--trial_subsample', type=float, default=1.0,
+                        required=False, help='Fraction of trials to subsample'
+                        'from training data')
     parser.add_argument('-c', '--cluster', type=str, default='True',
                         required=False,
                         help='Run on cluster (True) or local (False)')
+    parser.add_argument('-cv', '--cross_validate', type=str, default='False',
+                        required=False, help='Perform nested cross-validation')
     parser.add_argument('-f', '--filename', type=str, default='',
                         required=False,
                         help='Output filename for performance saving')
@@ -62,15 +70,17 @@ class DimRedReshape(BaseEstimator):
         self.n_components = n_components
 
     def fit(self, X, y=None):
-        X_r = X.reshape(-1, X.shape[-1])
+        # X_r = X.reshape(-1, X.shape[-1])
+        X_r = X.reshape(X.shape[0], -1)
         self.transformer = self.dim_red(n_components=self.n_components)
         self.transformer.fit(X_r)
         return self
 
     def transform(self, X, y=None):
-        X_r = X.reshape(-1, X.shape[-1])
+        # X_r = X.reshape(-1, X.shape[-1])
+        X_r = X.reshape(X.shape[0], -1)
         X_dr = self.transformer.transform(X_r)
-        X_dr = X_dr.reshape(X.shape[0], -1)
+        # X_dr = X_dr.reshape(X.shape[0], -1)
         return X_dr
 
     def fit_transform(self, X, y=None):
@@ -103,19 +113,36 @@ def aligned_decoding():
     random_data = str2bool(inputs['random_data'])
     joint_dim_red = str2bool(inputs['joint_dim_red'])
     no_S23 = str2bool(inputs['no_S23'])
+    tr_subsamp_r = inputs['trial_subsample']
+    do_cv = str2bool(inputs['cross_validate'])
 
     # constant params
-    n_iter = 25
+    n_iter = 50
     n_folds = 5
 
-    # CV GRID
-    param_grid = {'n_comp': [10, 20, 30, 40, 50],
-                  'decoder__estimator__C': [0.1, 1, 10, 100]}
-    # param_grid = {'n_comp': [40, 50]}
-    param_grid_single = {'dim_red__n_components': [10, 20, 30, 40, 50],
-                         'decoder__estimator__C': [0.1, 1, 10, 100]}
-    # param_grid_single = {'dim_red__n_components': [40, 50],
-    #                      'decoder__estimator__C': [0.1, 100]}
+    ###### CV GRID ######
+    if do_cv:
+        param_grid = {
+            'n_comp': (10, 50),
+            'decoder__dimredreshape__n_components': (0.1, 0.95, 'uniform'),
+            'decoder__baggingclassifier__estimator__C': (1e-3, 1e5, 'log-uniform'),
+            'decoder__baggingclassifier__estimator__gamma': (1e-4, 1e3, 'log-uniform'),
+            'decoder__baggingclassifier__n_estimators': (10, 100),
+        }
+        param_grid_single = {
+            'decoder__dimredreshape__n_components': (0.1, 0.95, 'uniform'),
+            'decoder__baggingclassifier__estimator__C': (1e-3, 1e5, 'log-uniform'),
+            'decoder__baggingclassifier__estimator__gamma': (1e-4, 1e3, 'log-uniform'),
+            'decoder__baggingclassifier__n_estimators': (10, 100),
+        }
+    else:
+        param_grid = {
+            'n_comp': 30,
+            'decoder__dimredreshape__n_components': 0.8,
+        }
+        param_grid_single = {
+            'dimredreshape__n_components': 0.8,
+        }
     ###################
 
     # alignment label type
@@ -130,6 +157,12 @@ def aligned_decoding():
     # dimensionality reduction type
     red_method = 'PCA'
     dim_red = PCA
+
+    # check alignment type
+    if joint_dim_red and cca_align:
+        print('Both joint_dim_red and cca_align are True. Using joint_dim_red '
+              'to perform alignment.')
+        cca_align = False
 
     # decoding run filename
     if inputs['filename'] != '':
@@ -158,6 +191,8 @@ def aligned_decoding():
     print('Label type: %s' % lab_type)
     print('Reduction method: %s' % red_method)
     # print('Reduction components: %d' % n_comp)
+    print('Trial subsampling ratio: %f' % inputs['trial_subsample'])
+    print('Do nested CV: %s' % do_cv)
     print('Number of iterations: %d' % n_iter)
     print('Number of folds: %d' % n_folds)
     print('==================================================================')
@@ -177,6 +212,21 @@ def aligned_decoding():
         D2 = np.random.rand(*D2.shape)
         D3 = np.random.rand(*D3.shape)
 
+    # define classifier
+    decoder = SVC(
+        # kernel='linear',
+        kernel='rbf',
+        class_weight='balanced',
+        )
+    clf = make_pipeline(
+                DimRedReshape(dim_red, n_components=0.8),
+                BaggingClassifier(
+                    estimator=decoder,
+                    # n_estimators=10,
+                    n_jobs=-1,
+                    )
+                )
+
     iter_accs = []
     wrong_trs_iter = []
     y_true_iter, y_pred_iter = [], []
@@ -191,11 +241,21 @@ def aligned_decoding():
             lab_tar_train, lab_tar_test = lab_tar[train_idx], lab_tar[test_idx]
             lab_tar_full_train, lab_tar_full_test = (lab_tar_full[train_idx],
                                                      lab_tar_full[test_idx])
-
-            clf = BaggingClassifier(estimator=SVC(kernel='linear'),
-                                    n_estimators=10)
+            
+            if tr_subsamp_r < 1:
+                # train test split to subsample training data with stratification
+                # (could also use np.random.choice for non-stratified subsampling)
+                D_tar_train, _, lab_tar_train, _, lab_tar_full_train, _ = (
+                                    train_test_split(D_tar_train,
+                                                    lab_tar_train,
+                                                    lab_tar_full_train,
+                                                    train_size=tr_subsamp_r,
+                                                    stratify=lab_tar_train,
+                                                    shuffle=True))    
 
             if pool_train:
+                # define data to pool across patients
+                # (may exclude hihh noise S23)
                 if no_S23:
                     cross_pt_data = [(D1, lab1, lab1_full),
                                      (D2, lab2, lab2_full)]
@@ -203,33 +263,65 @@ def aligned_decoding():
                     cross_pt_data = [(D1, lab1, lab1_full),
                                      (D2, lab2, lab2_full),
                                      (D3, lab3, lab3_full)]
-                if cca_align:
+                # define alignment method
+                if joint_dim_red:
+                    model = crossPtDecoder_jointDimRed(cross_pt_data, clf,
+                                                       JointPCADecomp)
+                elif cca_align:
                     model = crossPtDecoder_sepAlign(cross_pt_data, clf,
                                                     CCAAlign, dim_red=dim_red)
                 else:
                     model = crossPtDecoder_sepDimRed(cross_pt_data, clf,
                                                      dim_red=dim_red)
-                search = GridSearchCV(model, param_grid, cv=cv,
-                                      verbose=5, n_jobs=-1)
-                # search = RandomizedSearchCV(model, param_grid,
-                #                             n_iter=5, cv=cv, n_jobs=-1,
-                #                             verbose=1)
-                # search = BayesSearchCV(model, param_grid, n_iter=10, cv=cv,
-                #                        verbose=5, n_jobs=-1, n_points=5)
-                search.fit(D_tar_train, lab_tar_train,
-                           y_align=lab_tar_full_train)
-                print(f'Best Params: {search.best_params_},'
-                      f'Best Score: {search.best_score_}')
-                y_pred = search.predict(D_tar_test)
+                # nested cross-validation
+                if do_cv:
+                    # search = GridSearchCV(model, param_grid, cv=cv,
+                    #                       verbose=5, n_jobs=-1)
+                    # search = RandomizedSearchCV(model, param_grid,
+                    #                             n_iter=5, cv=cv, n_jobs=-1,
+                    #                             verbose=1)
+
+                    # need to call fit with the extra kwarg, so set refit to
+                    # False and call fit manually after finding params
+                    search = BayesSearchCV(model, param_grid, n_iter=25, cv=cv,
+                                          verbose=5, n_jobs=-1, n_points=5,
+                                          refit=False)
+                    search.fit(D_tar_train, lab_tar_train,
+                               y_align=lab_tar_full_train)
+                    print(f'Best Params: {search.best_params_},'
+                          f'Best Score: {search.best_score_}')
+                    best_params = search.best_params_
+                else:
+                    # if not doing CV
+                    best_params = param_grid
+
+                # manually fit model with best params (see note in CV section)
+                model.set_params(**best_params)
+                model.fit(D_tar_train, lab_tar_train,
+                        y_align=lab_tar_full_train)
+                y_pred = model.predict(D_tar_test)
             else:
-                model = Pipeline([('dim_red', DimRedReshape(dim_red)),
-                                  ('decoder', clf)])
-                search = GridSearchCV(model, param_grid_single, cv=cv,
-                                      verbose=5, n_jobs=-1)
-                search.fit(D_tar_train, lab_tar_train)
-                print(f'Best Params: {search.best_params_},'
-                      f'Best Score: {search.best_score_}')
-                y_pred = search.predict(D_tar_test)
+                # nested cross-validation
+                if do_cv:
+                    # model = Pipeline([('dim_red', DimRedReshape(dim_red)),
+                    #                   ('decoder', clf)])
+                    # search = GridSearchCV(clf, param_grid_single, cv=cv,
+                    #                       verbose=5, n_jobs=-1)
+                    search = BayesSearchCV(clf, param_grid_single, cv=3,
+                                        verbose=5, n_jobs=-1, n_iter=1,
+                                        refit=False)
+                    search.fit(D_tar_train, lab_tar_train)
+                    print(f'Best Params: {search.best_params_},'
+                        f'Best Score: {search.best_score_}')
+                    best_params = search.best_params_
+                else:
+                    # if not doing CV
+                    best_params = param_grid_single
+
+                # manually fit model with best params (see note in CV section)
+                clf.set_params(**best_params)
+                clf.fit(D_tar_train, lab_tar_train)
+                y_pred = clf.predict(D_tar_test)
 
             y_test = lab_tar_test
             y_true_all.extend(y_test)
