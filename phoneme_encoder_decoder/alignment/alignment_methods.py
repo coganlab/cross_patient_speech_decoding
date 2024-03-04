@@ -19,10 +19,9 @@ class MCCAAlign:
         self.pca_var = pca_var
 
     def fit(self, X, y):
-        mcca = self.get_MCCA_transforms(X, y,
-                                              n_components=self.n_components,
-                                              reg=self.reg,
-                                              initial_pca=self.initial_pca)
+        mcca = self.get_MCCA_transforms(X, y, n_components=self.n_components,
+                                        reg=self.reg,
+                                        pca_var=self.pca_var)
         self.mcca = mcca
 
     def transform(self, X, idx=-1):
