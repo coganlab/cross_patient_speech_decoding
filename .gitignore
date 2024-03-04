@@ -2,6 +2,7 @@
 *.mat
 data/
 dcc_shell_scripts/
+acc_data/
 
 ##### Default Python gitignore #####
 
