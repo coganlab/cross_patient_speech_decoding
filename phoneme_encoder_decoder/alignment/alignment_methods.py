@@ -6,8 +6,63 @@ Cogan & Viventi Labs, Duke University
 
 import numpy as np
 from sklearn.decomposition import PCA
+from mvlearn.embed import MCCA
 from functools import reduce
 from .utils import cnd_avg, label2str
+
+
+class MCCAAlign:
+
+    def __init__(self, n_components=10, reg=0.5, pca_var=-1):
+        self.n_components = n_components
+        self.reg = reg
+        self.pca_var = pca_var
+
+    def fit(self, X, y):
+        mcca = self.get_MCCA_transforms(X, y,
+                                              n_components=self.n_components,
+                                              reg=self.reg,
+                                              initial_pca=self.initial_pca)
+        self.mcca = mcca
+
+    def transform(self, X, idx=-1):
+        if not self._check_fit():
+            raise RuntimeError('Must call fit() before transforming data.')
+        if idx == -1:
+            return self._transform_multiple(X)
+        if idx >= len(self.mcca.transforms):
+            raise IndexError('Input idx is greater than the number of learned '
+                             'transforms. For transformation of data from a '
+                             'specific session, provide the input idx as the '
+                             'index of the session in the input list. If '
+                             'transforming multiple sessions, set idx=-1 '
+                             '(default).')
+        return self._transform_single(X, idx)
+    
+    def fit_transform(self, X, y):
+        self.fit(X, y)
+        return self.transform(X)
+    
+    def _transform_multiple(self, X):
+        transformed_data = [self.mcca.transform_view(x, i) for i, x in enumerate(X)]
+        transformed_data = [d.reshape(x.shape[:-1] + (-1,)) for d, x in zip(transformed_data, X)]
+        return (*transformed_data,)
+    
+    def _transform_single(self, X, idx):
+        transformed_data = self.mcca.transform_view(X[idx], idx)
+        return transformed_data.reshape(X[idx].shape[:-1] + (-1,))
+    
+    def _check_fit(self):
+        """Checks if the MCCA aligner has been fit to data.
+
+        Returns:
+            boolean: True if fit() has been called, False otherwise.
+        """
+        try:
+            self.mcca
+        except AttributeError:
+            return False
+        return True
 
 
 class JointPCADecomp:
@@ -189,6 +244,31 @@ class CCAAlign():
         except AttributeError:
             return False
         return True
+    
+
+def get_MCCA_transforms(features, labels, n_components=10, reg=0.5,
+                        pca_var=-1):
+    """Calculates transformation matrices to multi-view shared latent space"""
+    cnd_avg_data = extract_group_conditions(features, labels)
+    cnd_avg_data = [d.reshape(-1, d.shape[-1]) for d in cnd_avg_data]
+    
+    ranks = None
+    if pca_var > 0 and pca_var < 1:
+        ranks = [n_components_var(x, pca_var) for x in features]
+
+    mcca = MCCA(n_components=n_components, reg=reg, signal_ranks=ranks)
+    mcca.fit(cnd_avg_data)
+    return mcca
+
+
+def n_components_var(X, var):
+    # get squared singular values from svd of X
+    _, s, _ = np.linalg.svd(X)
+    s = s**2
+    # normalize singular values to sum to 1
+    s /= np.sum(s)
+    # find number of components to reach desired variance %
+    return np.argmax(np.cumsum(s) > var)
 
 
 def get_joint_PCA_transforms(features, labels, n_components=40, dim_red=PCA):
@@ -216,19 +296,7 @@ def get_joint_PCA_transforms(features, labels, n_components=40, dim_red=PCA):
             source. Length will be equal to the length of the input feature
             list.
     """
-    # process labels for easy comparison of label sequences
-    labels = [label2str(labs) for labs in labels]
-
-    # condition average firing rates for all datasets
-    cnd_avg_data = [0]*len(features)
-    for i, (feats, labs) in enumerate(zip(features, labels)):
-        cnd_avg_data[i] = cnd_avg(feats, labs)
-
-    # only use same conditions across datasets
-    shared_lab = reduce(np.intersect1d, labels)
-    cnd_avg_data = [cnd_avg_data[i][np.isin(np.unique(lab), shared_lab,
-                                            assume_unique=True)] for i, lab
-                    in enumerate(labels)]
+    cnd_avg_data = extract_group_conditions(features, labels)
 
     # combine all datasets into one matrix (n_conditions x n_timepoints x
     # sum channels)
@@ -250,6 +318,24 @@ def get_joint_PCA_transforms(features, labels, n_components=40, dim_red=PCA):
         # pt_latent_trans[i] = np.linalg.pinv(latent_trans)
 
     return (*pt_latent_trans,)
+
+
+def extract_group_conditions(Xs, ys):
+    # process labels for easy comparison of label sequences
+    ys = [label2str(labs) for labs in ys]
+
+    # condition average firing rates for all datasets
+    cnd_avg_data = [0]*len(Xs)
+    for i, (feats, labs) in enumerate(zip(Xs, ys)):
+        cnd_avg_data[i] = cnd_avg(feats, labs)
+
+    # only use same conditions across datasets
+    shared_lab = reduce(np.intersect1d, ys)
+    cnd_avg_data = [cnd_avg_data[i][np.isin(np.unique(lab), shared_lab,
+                                            assume_unique=True)] for i, lab
+                    in enumerate(ys)]
+    return cnd_avg_data
+    
 
 
 def reshape_latent_dynamics(X_a, X_b, y_a, y_b, type='class'):
