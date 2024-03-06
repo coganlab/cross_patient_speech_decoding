@@ -174,13 +174,13 @@ class crossPtDecoder_jointDimRed(crossPtDecoder):
 class crossPtDecoder_mcca(crossPtDecoder):
     """ Cross-patient Decoder with MCCA to align and pool patients. """
 
-    def __init__(self, cross_pt_data, decoder, aligner, n_comp=10, reg=0.5,
-                 pca_var=-1):
+    def __init__(self, cross_pt_data, decoder, aligner, n_comp=10, regs=0.5,
+                 pca_var=1):
         self.cross_pt_data = cross_pt_data
         self.decoder = decoder
         self.aligner = aligner
         self.n_comp = n_comp
-        self.reg = reg
+        self.regs = regs
         self.pca_var = pca_var
 
     def preprocess_train(self, X, y, y_align=None):
@@ -193,7 +193,7 @@ class crossPtDecoder_mcca(crossPtDecoder):
         X_cross = [x for x, _, _ in self.cross_pt_data]
 
         # joint dimensionality reduction
-        self.aligner = self.aligner(n_components=self.n_comp, reg=self.reg,
+        self.aligner = self.aligner(n_components=self.n_comp, regs=self.regs,
                                     pca_var=self.pca_var)
         X_mcca = self.aligner.fit_transform([X] + X_cross,
                                             [y_align] + y_align_cross)

@@ -13,14 +13,14 @@ from .utils import cnd_avg, label2str
 
 class MCCAAlign:
 
-    def __init__(self, n_components=10, reg=0.5, pca_var=-1):
+    def __init__(self, n_components=10, regs=0.5, pca_var=1):
         self.n_components = n_components
-        self.reg = reg
+        self.regs = regs
         self.pca_var = pca_var
 
     def fit(self, X, y):
-        mcca = self.get_MCCA_transforms(X, y, n_components=self.n_components,
-                                        reg=self.reg,
+        mcca = get_MCCA_transforms(X, y, n_components=self.n_components,
+                                        regs=self.regs,
                                         pca_var=self.pca_var)
         self.mcca = mcca
 
@@ -29,7 +29,7 @@ class MCCAAlign:
             raise RuntimeError('Must call fit() before transforming data.')
         if idx == -1:
             return self._transform_multiple(X)
-        if idx >= len(self.mcca.transforms):
+        if idx >= len(self.mcca.loadings_):
             raise IndexError('Input idx is greater than the number of learned '
                              'transforms. For transformation of data from a '
                              'specific session, provide the input idx as the '
@@ -43,13 +43,13 @@ class MCCAAlign:
         return self.transform(X)
     
     def _transform_multiple(self, X):
-        transformed_data = [self.mcca.transform_view(x, i) for i, x in enumerate(X)]
+        transformed_data = [self.mcca.transform_view(x.reshape(-1, x.shape[-1]), i) for i, x in enumerate(X)]
         transformed_data = [d.reshape(x.shape[:-1] + (-1,)) for d, x in zip(transformed_data, X)]
         return (*transformed_data,)
     
     def _transform_single(self, X, idx):
-        transformed_data = self.mcca.transform_view(X[idx], idx)
-        return transformed_data.reshape(X[idx].shape[:-1] + (-1,))
+        transformed_data = self.mcca.transform_view(X.reshape(-1, X.shape[-1]), idx)
+        return transformed_data.reshape(X.shape[:-1] + (-1,))
     
     def _check_fit(self):
         """Checks if the MCCA aligner has been fit to data.
@@ -245,17 +245,17 @@ class CCAAlign():
         return True
     
 
-def get_MCCA_transforms(features, labels, n_components=10, reg=0.5,
-                        pca_var=-1):
+def get_MCCA_transforms(features, labels, n_components=10, regs=0.5,
+                        pca_var=1):
     """Calculates transformation matrices to multi-view shared latent space"""
     cnd_avg_data = extract_group_conditions(features, labels)
     cnd_avg_data = [d.reshape(-1, d.shape[-1]) for d in cnd_avg_data]
     
     ranks = None
     if pca_var > 0 and pca_var < 1:
-        ranks = [n_components_var(x, pca_var) for x in features]
+        ranks = [min(n_components, n_components_var(x, pca_var)) for x in features]
 
-    mcca = MCCA(n_components=n_components, reg=reg, signal_ranks=ranks)
+    mcca = MCCA(n_components=n_components, regs=regs, signal_ranks=ranks)
     mcca.fit(cnd_avg_data)
     return mcca
 

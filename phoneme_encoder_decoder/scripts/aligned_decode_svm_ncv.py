@@ -102,9 +102,11 @@ def aligned_decoding():
 
     cluster = str2bool(inputs['cluster'])
     if cluster:
-        DATA_PATH = os.path.expanduser('~') + '/workspace/'
+        DATA_PATH = os.path.expanduser('~') + '/data/'
+        OUT_PATH = os.path.expanduser('~') + '/workspace/'
     else:
         DATA_PATH = '../data/'
+        OUT_PATH = '../acc_data/'
 
     # patient and target params
     pt = inputs['patient']
@@ -130,7 +132,7 @@ def aligned_decoding():
         if mcca_align:
             param_grid = {
                 'n_comp': (10, 50),
-                'reg': (1e-3, 1, 'log-uniform'),
+                # 'regs': (1e-3, 1, 'log-uniform'),
                 'pca_var': (0.1, 0.95, 'uniform'),
                 'decoder__dimredreshape__n_components': (0.1, 0.95, 'uniform'),
                 'decoder__baggingclassifier__estimator__C': (1e-3, 1e5, 'log-uniform'),
@@ -152,10 +154,18 @@ def aligned_decoding():
             'decoder__baggingclassifier__n_estimators': (10, 100),
         }
     else:
-        param_grid = {
-            'n_comp': 30,
-            'decoder__dimredreshape__n_components': 0.8,
-        }
+        if mcca_align:
+            param_grid = {
+                'n_comp': 30,
+                'regs': 0.5,
+                'pca_var': 0.8,
+                'decoder__dimredreshape__n_components': 0.8,
+            }
+        else:
+            param_grid = {
+                'n_comp': 30,
+                'decoder__dimredreshape__n_components': 0.8,
+            }
         param_grid_single = {
             'dimredreshape__n_components': 0.8,
         }
@@ -187,9 +197,9 @@ def aligned_decoding():
     else:
         filename_suffix = inputs['suffix']
         if cluster:
-            out_prefix = DATA_PATH + f'outputs/alignment_accs/{pt}/'
+            out_prefix = OUT_PATH + f'outputs/alignment_accs/{pt}/'
         else:
-            out_prefix = f'../acc_data/ncv_accs/{pt}/'
+            out_prefix = OUT_PATH + f'ncv_accs/{pt}/'
         filename = out_prefix + (f"{pt}_{'p' if lab_type == 'phon'else 'a'}"
                                  f"{'All' if p_ind == -1 else p_ind}_"
                                  f"{filename_suffix}.pkl")
@@ -200,7 +210,7 @@ def aligned_decoding():
     print('Pool train: %s' % pool_train)
     print('Target in train: %s' % tar_in_train)
     print('CCA align: %s' % cca_align)
-    print('MCCA align: %s' % cca_align)
+    print('MCCA align: %s' % mcca_align)
     print('Joint Dim Red: %s' % joint_dim_red)
     print('Random data: %s' % random_data)
     print('No S23: %s' % no_S23)
