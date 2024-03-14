@@ -3,6 +3,7 @@
 data/
 dcc_shell_scripts/
 acc_data/
+*.mp4
 
 ##### Default Python gitignore #####
 
