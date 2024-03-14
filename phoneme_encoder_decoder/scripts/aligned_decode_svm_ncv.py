@@ -16,10 +16,11 @@ from skopt import BayesSearchCV
 
 sys.path.insert(0, '..')
 
-from alignment.alignment_methods import JointPCADecomp, CCAAlign
+from alignment.alignment_methods import JointPCADecomp, CCAAlign, MCCAAlign
 from alignment.cross_pt_decoders import (crossPtDecoder_sepDimRed,
                                          crossPtDecoder_sepAlign,
-                                         crossPtDecoder_jointDimRed)
+                                         crossPtDecoder_jointDimRed,
+                                         crossPtDecoder_mcca)
 import alignment.utils as utils
 
 
@@ -36,10 +37,13 @@ def init_parser():
     parser.add_argument('-a', '--cca_align', type=str, default='False',
                         required=False,
                         help='Align pooled data to target data with CCA')
-    parser.add_argument('-r', '--random_data', type=str, default='False',
-                        required=False, help='Use random data for pooling')
+    parser.add_argument('-m', '--MCCA_align', type=str, default='False',
+                        required=False,
+                        help='Align pooled data to shared space with MCCA')
     parser.add_argument('-j', '--joint_dim_red', type=str, default='False',
                         required=False, help='Learn joint PCA decomposition')
+    parser.add_argument('-r', '--random_data', type=str, default='False',
+                        required=False, help='Use random data for pooling')
     parser.add_argument('-n', '--no_S23', type=str, default='False',
                         required=False, help='Exclude S23 from pooling')
     parser.add_argument('-tss', '--trial_subsample', type=float, default=1.0,
@@ -98,9 +102,11 @@ def aligned_decoding():
 
     cluster = str2bool(inputs['cluster'])
     if cluster:
-        DATA_PATH = os.path.expanduser('~') + '/workspace/'
+        DATA_PATH = os.path.expanduser('~') + '/data/'
+        OUT_PATH = os.path.expanduser('~') + '/workspace/'
     else:
         DATA_PATH = '../data/'
+        OUT_PATH = '../acc_data/'
 
     # patient and target params
     pt = inputs['patient']
@@ -110,8 +116,9 @@ def aligned_decoding():
     pool_train = str2bool(inputs['pool_train'])
     tar_in_train = str2bool(inputs['tar_in_train'])
     cca_align = str2bool(inputs['cca_align'])
-    random_data = str2bool(inputs['random_data'])
+    mcca_align = str2bool(inputs['MCCA_align'])
     joint_dim_red = str2bool(inputs['joint_dim_red'])
+    random_data = str2bool(inputs['random_data'])
     no_S23 = str2bool(inputs['no_S23'])
     tr_subsamp_r = inputs['trial_subsample']
     do_cv = str2bool(inputs['cross_validate'])
@@ -122,13 +129,24 @@ def aligned_decoding():
 
     ###### CV GRID ######
     if do_cv:
-        param_grid = {
-            'n_comp': (10, 50),
-            'decoder__dimredreshape__n_components': (0.1, 0.95, 'uniform'),
-            'decoder__baggingclassifier__estimator__C': (1e-3, 1e5, 'log-uniform'),
-            'decoder__baggingclassifier__estimator__gamma': (1e-4, 1e3, 'log-uniform'),
-            'decoder__baggingclassifier__n_estimators': (10, 100),
-        }
+        if mcca_align:
+            param_grid = {
+                'n_comp': (10, 50),
+                # 'regs': (1e-3, 1, 'log-uniform'),
+                'pca_var': (0.1, 0.95, 'uniform'),
+                'decoder__dimredreshape__n_components': (0.1, 0.95, 'uniform'),
+                'decoder__baggingclassifier__estimator__C': (1e-3, 1e5, 'log-uniform'),
+                'decoder__baggingclassifier__estimator__gamma': (1e-4, 1e3, 'log-uniform'),
+                'decoder__baggingclassifier__n_estimators': (10, 100),
+            }
+        else:
+            param_grid = {
+                'n_comp': (10, 50),
+                'decoder__dimredreshape__n_components': (0.1, 0.95, 'uniform'),
+                'decoder__baggingclassifier__estimator__C': (1e-3, 1e5, 'log-uniform'),
+                'decoder__baggingclassifier__estimator__gamma': (1e-4, 1e3, 'log-uniform'),
+                'decoder__baggingclassifier__n_estimators': (10, 100),
+            }
         param_grid_single = {
             'decoder__dimredreshape__n_components': (0.1, 0.95, 'uniform'),
             'decoder__baggingclassifier__estimator__C': (1e-3, 1e5, 'log-uniform'),
@@ -136,10 +154,18 @@ def aligned_decoding():
             'decoder__baggingclassifier__n_estimators': (10, 100),
         }
     else:
-        param_grid = {
-            'n_comp': 30,
-            'decoder__dimredreshape__n_components': 0.8,
-        }
+        if mcca_align:
+            param_grid = {
+                'n_comp': 30,
+                'regs': 0.5,
+                'pca_var': 0.8,
+                'decoder__dimredreshape__n_components': 0.8,
+            }
+        else:
+            param_grid = {
+                'n_comp': 30,
+                'decoder__dimredreshape__n_components': 0.8,
+            }
         param_grid_single = {
             'dimredreshape__n_components': 0.8,
         }
@@ -159,10 +185,11 @@ def aligned_decoding():
     dim_red = PCA
 
     # check alignment type
-    if joint_dim_red and cca_align:
-        print('Both joint_dim_red and cca_align are True. Using joint_dim_red '
+    if sum([cca_align, mcca_align, joint_dim_red]) > 1:
+        print('Multiple alignment types are true. Using joint_dim_red '
               'to perform alignment.')
         cca_align = False
+        mcca_align = False
 
     # decoding run filename
     if inputs['filename'] != '':
@@ -170,9 +197,9 @@ def aligned_decoding():
     else:
         filename_suffix = inputs['suffix']
         if cluster:
-            out_prefix = DATA_PATH + f'outputs/alignment_accs/{pt}/'
+            out_prefix = OUT_PATH + f'outputs/alignment_accs/{pt}/'
         else:
-            out_prefix = f'../acc_data/ncv_accs/{pt}/'
+            out_prefix = OUT_PATH + f'ncv_accs/{pt}/'
         filename = out_prefix + (f"{pt}_{'p' if lab_type == 'phon'else 'a'}"
                                  f"{'All' if p_ind == -1 else p_ind}_"
                                  f"{filename_suffix}.pkl")
@@ -183,8 +210,9 @@ def aligned_decoding():
     print('Pool train: %s' % pool_train)
     print('Target in train: %s' % tar_in_train)
     print('CCA align: %s' % cca_align)
-    print('Random data: %s' % random_data)
+    print('MCCA align: %s' % mcca_align)
     print('Joint Dim Red: %s' % joint_dim_red)
+    print('Random data: %s' % random_data)
     print('No S23: %s' % no_S23)
     print('Alignment type: %s' % algn_type)
     print('Alignment grouping: %s' % algn_grouping)
@@ -270,6 +298,8 @@ def aligned_decoding():
                 elif cca_align:
                     model = crossPtDecoder_sepAlign(cross_pt_data, clf,
                                                     CCAAlign, dim_red=dim_red)
+                elif mcca_align:
+                    model = crossPtDecoder_mcca(cross_pt_data, clf, MCCAAlign)
                 else:
                     model = crossPtDecoder_sepDimRed(cross_pt_data, clf,
                                                      dim_red=dim_red)

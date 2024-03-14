@@ -169,3 +169,46 @@ class crossPtDecoder_jointDimRed(crossPtDecoder):
     def preprocess_test(self, X):
         X_dr = self.joint_dr.transform(X, idx=0)
         return X_dr.reshape(X.shape[0], -1)
+
+
+class crossPtDecoder_mcca(crossPtDecoder):
+    """ Cross-patient Decoder with MCCA to align and pool patients. """
+
+    def __init__(self, cross_pt_data, decoder, aligner, n_comp=10, regs=0.5,
+                 pca_var=1):
+        self.cross_pt_data = cross_pt_data
+        self.decoder = decoder
+        self.aligner = aligner
+        self.n_comp = n_comp
+        self.regs = regs
+        self.pca_var = pca_var
+
+    def preprocess_train(self, X, y, y_align=None):
+        # option for separate alignment labels
+        if y_align is None:
+            y_align = y
+        y_align_cross = [y_a for _, _, y_a in self.cross_pt_data]
+
+        # extract features from cross pt data
+        X_cross = [x for x, _, _ in self.cross_pt_data]
+
+        # joint dimensionality reduction
+        self.aligner = self.aligner(n_components=self.n_comp, regs=self.regs,
+                                    pca_var=self.pca_var)
+        X_mcca = self.aligner.fit_transform([X] + X_cross,
+                                            [y_align] + y_align_cross)
+        X_tar_dr, X_algn_dr = X_mcca[0], X_mcca[1:]
+        
+        # reshape to trialx x features
+        X_algn_dr = [x.reshape(x.shape[0], -1) for x in X_algn_dr]
+        X_tar_dr = X_tar_dr.reshape(X_tar_dr.shape[0], -1)
+        
+        # concatenate cross-patient data
+        X_pool = np.vstack([X_tar_dr] + X_algn_dr)
+        y_pool = np.hstack([y] + [y for _, y, _ in self.cross_pt_data])
+        return X_pool, y_pool
+
+
+    def preprocess_test(self, X):
+        X_mcca = self.aligner.transform(X, idx=0)
+        return X_mcca.reshape(X.shape[0], -1)
