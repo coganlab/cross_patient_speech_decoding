@@ -1,2 +1,2 @@
-# RNN_phoneme_decoding_micro
-Modification of RNNs for seq2seq phoneme decoding
+# Cross Patient Speech Decoding
+Using preserved neural activity in cross-patient latent spaces to train neural speech decoding models on cross-patient data.
