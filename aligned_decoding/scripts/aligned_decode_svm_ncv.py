@@ -16,14 +16,14 @@ from skopt import BayesSearchCV
 
 sys.path.insert(0, '..')
 
-from aligned_decoding.alignment.JointPCA import JointPCA
-from aligned_decoding.alignment.AlignCCA import AlignCCA
-from aligned_decoding.alignment.AlignMCCA import AlignMCCA
-from alignment.cross_pt_decoders import (crossPtDecoder_sepDimRed,
-                                         crossPtDecoder_sepAlign,
-                                         crossPtDecoder_jointDimRed,
-                                         crossPtDecoder_mcca)
-import alignment.utils as utils
+from alignment.JointPCA import JointPCA
+from alignment.AlignCCA import AlignCCA
+from alignment.AlignMCCA import AlignMCCA
+from decoders.cross_pt_decoders import (crossPtDecoder_sepDimRed,
+                                        crossPtDecoder_sepAlign,
+                                        crossPtDecoder_jointDimRed,
+                                        crossPtDecoder_mcca)
+import alignment.alignment_utils as utils
 
 
 def init_parser():
@@ -228,19 +228,24 @@ def aligned_decoding():
     print('==================================================================')
 
     # load data
-    pt_data = utils.load_pkl(DATA_PATH + 'pt_decoding_data.pkl')
+    # data_filename = DATA_PATH + 'pt_decoding_data.pkl'
+    data_filename = DATA_PATH + 'pt_decoding_data_S22.pkl'
+    pt_data = utils.load_pkl(data_filename)
     tar_data, pre_data = utils.decoding_data_from_dict(pt_data, pt, p_ind,
                                                        lab_type=lab_type,
                                                        algn_type=algn_type)
     D_tar, lab_tar, lab_tar_full = tar_data
-    D1, lab1, lab1_full = pre_data[0]
-    D2, lab2, lab2_full = pre_data[1]
-    D3, lab3, lab3_full = pre_data[2]
+    # D1, lab1, lab1_full = pre_data[0]
+    # D2, lab2, lab2_full = pre_data[1]
+    # D3, lab3, lab3_full = pre_data[2]
 
     if random_data:
-        D1 = np.random.rand(*D1.shape)
-        D2 = np.random.rand(*D2.shape)
-        D3 = np.random.rand(*D3.shape)
+        # D1 = np.random.rand(*D1.shape)
+        # D2 = np.random.rand(*D2.shape)
+        # D3 = np.random.rand(*D3.shape)
+        cross_pt_data = [(np.random.rand(*d[0].shape), d[1], d[2]) for d in pre_data]
+    else:
+        cross_pt_data = pre_data
 
     # define classifier
     decoder = SVC(
@@ -285,14 +290,14 @@ def aligned_decoding():
 
             if pool_train:
                 # define data to pool across patients
-                # (may exclude hihh noise S23)
-                if no_S23:
-                    cross_pt_data = [(D1, lab1, lab1_full),
-                                     (D2, lab2, lab2_full)]
-                else:
-                    cross_pt_data = [(D1, lab1, lab1_full),
-                                     (D2, lab2, lab2_full),
-                                     (D3, lab3, lab3_full)]
+                # (may exclude high noise S23)
+                # if no_S23:
+                #     cross_pt_data = [(D1, lab1, lab1_full),
+                #                      (D2, lab2, lab2_full)]
+                # else:
+                #     cross_pt_data = [(D1, lab1, lab1_full),
+                #                      (D2, lab2, lab2_full),
+                #                      (D3, lab3, lab3_full)]
                 # define alignment method
                 if joint_dim_red:
                     model = crossPtDecoder_jointDimRed(cross_pt_data, clf,
