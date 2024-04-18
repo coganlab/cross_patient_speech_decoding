@@ -51,6 +51,8 @@ def init_parser():
     parser.add_argument('-tss', '--trial_subsample', type=float, default=1.0,
                         required=False, help='Fraction of trials to subsample'
                         'from training data')
+    parser.add_argument('-pp', '--pooled_patients', type=str, default='',
+                        required=False, help='Cross patient indices')
     parser.add_argument('-c', '--cluster', type=str, default='True',
                         required=False,
                         help='Run on cluster (True) or local (False)')
@@ -125,9 +127,15 @@ def aligned_decoding():
     tr_subsamp_r = inputs['trial_subsample']
     do_cv = str2bool(inputs['cross_validate'])
 
+    pooled_pts = []
+    if inputs['pooled_patients'] != '':
+        pooled_pts = inputs['pooled_patients'].split(',')
+
     # constant params
     n_iter = 50
     n_folds = 5
+    # n_iter = 2
+    # n_folds = 2
 
     ###### CV GRID ######
     if do_cv:
@@ -222,6 +230,7 @@ def aligned_decoding():
     print('Reduction method: %s' % red_method)
     # print('Reduction components: %d' % n_comp)
     print('Trial subsampling ratio: %f' % inputs['trial_subsample'])
+    print('Pooled patients: %s' % pooled_pts)
     print('Do nested CV: %s' % do_cv)
     print('Number of iterations: %d' % n_iter)
     print('Number of folds: %d' % n_folds)
@@ -244,8 +253,13 @@ def aligned_decoding():
         # D2 = np.random.rand(*D2.shape)
         # D3 = np.random.rand(*D3.shape)
         cross_pt_data = [(np.random.rand(*d[0].shape), d[1], d[2]) for d in pre_data]
+    elif len(pooled_pts) > 0:
+        pre_pts = pt_data[pt]['pre_pts']
+        cross_pt_data = [pre_data[pre_pts.index(p)] for p in pooled_pts]
     else:
         cross_pt_data = pre_data
+    # print(f'Length of cross pt data: {len(cross_pt_data)}')
+    # print(f'Pooled patients: {[pre_pts[pre_pts.index(p)] for p in pooled_pts]}')
 
     # define classifier
     decoder = SVC(
