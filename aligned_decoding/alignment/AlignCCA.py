@@ -16,9 +16,10 @@ class AlignCCA:
 
     def fit(self, X_a, X_b, y_a, y_b):
         L_a, L_b = reshape_latent_dynamics(X_a, X_b, y_a, y_b, type=self.type)
-        M_a, M_b = CCA_align(L_a.T, L_b.T)
+        M_a, M_b, S = CCA_align(L_a.T, L_b.T)
         self.M_a = M_a
         self.M_b = M_b
+        self.canon_corrs = S
 
     def transform(self, X):
         if not self._check_fit():
@@ -131,4 +132,4 @@ def CCA_align(L_a, L_b):
     M_a = np.linalg.pinv(R_a) @ U
     M_b = np.linalg.pinv(R_b) @ Vt.T
 
-    return M_a, M_b
+    return M_a, M_b, S
