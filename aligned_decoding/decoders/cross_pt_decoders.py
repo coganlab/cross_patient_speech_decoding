@@ -110,9 +110,9 @@ class crossPtDecoder_sepAlign(crossPtDecoder):
         y_align_cross = [y_a for _, _, y_a in self.cross_pt_data]
 
         # align data to target patient
-        algns = [self.aligner() for _ in range(len(self.cross_pt_data))]
+        self.algns = [self.aligner() for _ in range(len(self.cross_pt_data))]
         X_algn_dr = []
-        for i, algn in enumerate(algns):
+        for i, algn in enumerate(self.algns):
             algn.fit(X_tar_dr, X_cross_dr[i], y_align, y_align_cross[i])
             X_algn_dr.append(algn.transform(X_cross_dr[i]))
 
