@@ -51,7 +51,7 @@ def init_parser():
     parser.add_argument('-tss', '--trial_subsample', type=float, default=1.0,
                         required=False, help='Fraction of trials to subsample'
                         'from training data')
-    parser.add_argument('-pp', '--pooled_patients', type=str, default='',
+    parser.add_argument('-pp', '--pooled_patients', type=str, default='all',
                         required=False, help='Cross patient indices')
     parser.add_argument('-c', '--cluster', type=str, default='True',
                         required=False,
@@ -128,7 +128,7 @@ def aligned_decoding():
     do_cv = str2bool(inputs['cross_validate'])
 
     pooled_pts = []
-    if inputs['pooled_patients'] != '':
+    if inputs['pooled_patients'] != 'all':
         pooled_pts = inputs['pooled_patients'].split(',')
 
     # constant params
@@ -238,7 +238,10 @@ def aligned_decoding():
 
     # load data
     # data_filename = DATA_PATH + 'pt_decoding_data.pkl'
-    data_filename = DATA_PATH + 'pt_decoding_data_S22.pkl'
+    # data_filename = DATA_PATH + 'pt_decoding_data_S22.pkl'
+    # data_filename = DATA_PATH + 'pt_decoding_data_S39.pkl'
+    # data_filename = DATA_PATH + 'pt_decoding_data_S58.pkl'
+    data_filename = DATA_PATH + 'pt_decoding_data_S62.pkl'
     pt_data = utils.load_pkl(data_filename)
     tar_data, pre_data = utils.decoding_data_from_dict(pt_data, pt, p_ind,
                                                        lab_type=lab_type,
