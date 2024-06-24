@@ -121,6 +121,18 @@ def CCA_align(L_a, L_b):
             M_a (ndarray): Manifold directions for dataset A of shape (m, m)
             M_b (ndarray): Manifold directions for dataset B of shape (m, m)
     """
+    # center data
+    L_a -= np.mean(L_a, 0)
+    L_b -= np.mean(L_b, 0)
+    # L_a -= np.mean(L_a, 1, keepdims=True)
+    # L_b -= np.mean(L_b, 1, keepdims=True)
+
+    # determine min rank for CCA return
+    rank_a = np.linalg.matrix_rank(L_a)
+    rank_b = np.linalg.matrix_rank(L_b)
+    d = min(rank_a, rank_b)
+    # d = min(L_a.shape[0], L_b.shape[0])
+
     # QR decomposition
     Q_a, R_a = np.linalg.qr(L_a.T)
     Q_b, R_b = np.linalg.qr(L_b.T)
@@ -128,8 +140,14 @@ def CCA_align(L_a, L_b):
     # SVD on q inner product
     U, S, Vt = np.linalg.svd(Q_a.T @ Q_b)
 
-    # calculate manifold directions
-    M_a = np.linalg.pinv(R_a) @ U
-    M_b = np.linalg.pinv(R_b) @ Vt.T
+    # calculate manifold directions (take only d dimensions for alignment)
+    M_a = np.linalg.pinv(R_a) @ U[:,:d]
+    M_b = np.linalg.pinv(R_b) @ Vt.T[:,:d]
+    # M_b = np.linalg.pinv(R_b) @ Vt[:,:d]
+    S = S[:d]
+
+    # account for numerical errors
+    S[S < 0] = 0
+    S[S >= 1] = 1
 
     return M_a, M_b, S
