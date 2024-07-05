@@ -100,6 +100,58 @@ def shared_trial_subselect(X_a, X_b, y_a, y_b):
     return L_a, L_b
 
 
+# def CCA_align(L_a, L_b):
+#     """Canonical Correlation Analysis (CCA) alignment between 2 datasets.
+
+#     From: https://www.nature.com/articles/s41593-019-0555-4#Sec11.
+#     Returns manifold directions to transform L_a and L_b into a common space
+#     (e.g. L_a_new.T = L_a.T @ M_a, L_b_new.T = L_b.T @ M_b).
+#     To transform into a specific patient space, for example putting everything
+#     in patient A's space, use L_(b->a).T = L_b.T @ M_b @ (M_a)^-1, where L_a
+#     and L_(b->a) will be aligned in the same space.
+
+#     Args:
+#         L_a (ndarray): Latent dynamics array for dataset A of shape (T, m),
+#              where T is the number of timepoints/observations and  m is the
+#              number of latent dimensions.
+#         L_b (ndarray): Latent dynamics array for dataset B of shape (T, m)
+
+#     Returns:
+#         tuple: tuple containing:
+#             M_a (ndarray): Manifold directions for dataset A of shape (m, m)
+#             M_b (ndarray): Manifold directions for dataset B of shape (m, m)
+#     """
+#     # center data
+#     L_a -= np.mean(L_a, 0)
+#     L_b -= np.mean(L_b, 0)
+#     # L_a -= np.mean(L_a, 1, keepdims=True)
+#     # L_b -= np.mean(L_b, 1, keepdims=True)
+
+#     # determine min rank for CCA return
+#     rank_a = np.linalg.matrix_rank(L_a)
+#     rank_b = np.linalg.matrix_rank(L_b)
+#     d = min(rank_a, rank_b)
+#     # d = min(L_a.shape[0], L_b.shape[0])
+
+#     # QR decomposition
+#     Q_a, R_a = np.linalg.qr(L_a.T)
+#     Q_b, R_b = np.linalg.qr(L_b.T)
+
+#     # SVD on q inner product
+#     U, S, Vt = np.linalg.svd(Q_a.T @ Q_b)
+
+#     # calculate manifold directions (take only d dimensions for alignment)
+#     M_a = np.linalg.pinv(R_a) @ U[:,:d]
+#     M_b = np.linalg.pinv(R_b) @ Vt.T[:,:d]
+#     # M_b = np.linalg.pinv(R_b) @ Vt[:,:d]
+#     S = S[:d]
+
+#     # account for numerical errors
+#     S[S < 0] = 0
+#     S[S >= 1] = 1
+
+#     return M_a, M_b, S
+
 def CCA_align(L_a, L_b):
     """Canonical Correlation Analysis (CCA) alignment between 2 datasets.
 
@@ -122,10 +174,10 @@ def CCA_align(L_a, L_b):
             M_b (ndarray): Manifold directions for dataset B of shape (m, m)
     """
     # center data
-    L_a -= np.mean(L_a, 0)
-    L_b -= np.mean(L_b, 0)
-    # L_a -= np.mean(L_a, 1, keepdims=True)
-    # L_b -= np.mean(L_b, 1, keepdims=True)
+    # L_a -= np.mean(L_a, 0)
+    # L_b -= np.mean(L_b, 0)
+    L_a -= np.mean(L_a, 1, keepdims=True)
+    L_b -= np.mean(L_b, 1, keepdims=True)
 
     # determine min rank for CCA return
     rank_a = np.linalg.matrix_rank(L_a)
