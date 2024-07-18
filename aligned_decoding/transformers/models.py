@@ -1,7 +1,7 @@
-import lightning as L
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import lightning as L
 from torchmetrics.functional.classification import multiclass_confusion_matrix
 
 
@@ -158,7 +158,7 @@ class Transformer(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.learning_rate,
+        return torch.optim.AdamW(self.parameters(), lr=self.learning_rate,
                                 weight_decay=self.l2_reg)
 
 def cmat_acc(y_hat, y, num_classes):

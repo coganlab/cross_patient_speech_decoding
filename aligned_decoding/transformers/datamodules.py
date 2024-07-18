@@ -1,6 +1,6 @@
-import lightning as L
 import torch
 from torch.utils.data import DataLoader, TensorDataset
+import lightning as L
 import numpy as np
 from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
 from sklearn.decomposition import PCA
