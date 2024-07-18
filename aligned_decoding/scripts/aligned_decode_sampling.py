@@ -12,6 +12,7 @@ from sklearn.svm import SVC
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.ensemble import BaggingClassifier
 from sklearn.pipeline import make_pipeline, Pipeline
+from sklearn.metrics import confusion_matrix
 from skopt import BayesSearchCV
 
 sys.path.insert(0, '..')
@@ -64,29 +65,17 @@ def str2bool(s):
     return s.lower() == 'true'
 
 
-class DimRedReshape(BaseEstimator):
+# def cmat_acc(y_true, y_pred):
+#     cmat = confusion_matrix(y_true, y_pred)
+#     acc_cmat = np.trace(cmat) / np.sum(cmat)
+#     return acc_cmat
 
-    def __init__(self, dim_red, n_components=10):
-        self.dim_red = dim_red
-        self.n_components = n_components
+# def cmat_wrap(y_true_iter, y_pred_iter):
+#     accs = []
+#     for y_true, y_pred in zip(y_true_iter, y_pred_iter):
+#         accs.append(cmat_acc(y_true, y_pred))
+#     return np.array(accs)
 
-    def fit(self, X, y=None):
-        # X_r = X.reshape(-1, X.shape[-1])
-        X_r = X.reshape(X.shape[0], -1)
-        self.transformer = self.dim_red(n_components=self.n_components)
-        self.transformer.fit(X_r)
-        return self
-
-    def transform(self, X, y=None):
-        # X_r = X.reshape(-1, X.shape[-1])
-        X_r = X.reshape(X.shape[0], -1)
-        X_dr = self.transformer.transform(X_r)
-        # X_dr = X_dr.reshape(X.shape[0], -1)
-        return X_dr
-
-    def fit_transform(self, X, y=None):
-        self.fit(X)
-        return self.transform(X)
     
 def pooled_sampled_decoding():
     parser = init_parser()
@@ -116,10 +105,12 @@ def pooled_sampled_decoding():
     do_cv = str2bool(inputs['cross_validate'])
 
     # constant params
-    n_iter = 5
+    n_iter = 50
     n_folds = 20
     # n_iter = 2
     # n_folds = 2
+    
+    trial_step = 10
 
     ###### CV GRID ######
     if do_cv:
@@ -170,11 +161,11 @@ def pooled_sampled_decoding():
     # lab_type = 'artic'
 
     # dimensionality reduction type
-    # red_method = 'PCA'
-    # dim_red = PCA
+    red_method = 'PCA'
+    dim_red = PCA
 
-    red_method = 'PCA (no centering)'
-    dim_red = NoCenterPCA
+    # red_method = 'PCA (no centering)'
+    # dim_red = NoCenterPCA
 
     # check alignment type
     if sum([cca_align, mcca_align, joint_dim_red]) > 1:
@@ -267,11 +258,11 @@ def pooled_sampled_decoding():
     D_tar, lab_tar, lab_tar_full = tar_data
 
     max_trs = max([x.shape[0] for x, _, _ in pre_data])
-    k_trials_per_pt = np.arange(1, max_trs + 1)
+    k_trials_per_pt = np.arange(1, max_trs + 1, trial_step)
 
     pool_samp_mat = np.full((len(k_trials_per_pt), n_iter), np.nan)
     trial_vec = np.full(len(k_trials_per_pt), np.nan)
-    for k in k_trials_per_pt:
+    for trial_idx, k in enumerate(k_trials_per_pt):
         print(f'##### Sampling {k} trials per patient #####')
         # sample k trials from each patient to make a subsampled cross-patient
         # dataset
@@ -287,7 +278,7 @@ def pooled_sampled_decoding():
 
         # keep track of how many trials are sampled at each step for figure
         num_trials = np.sum([x.shape[0] for x, _, _ in cross_pt_data])
-        trial_vec[k-1] = num_trials
+        trial_vec[trial_idx] = num_trials
 
         # do n iterations of standard aligned cross-patient decoding with
         # subsampled data
@@ -296,7 +287,7 @@ def pooled_sampled_decoding():
             cv = StratifiedKFold(n_splits=n_folds, shuffle=True)
 
             for j, (train_idx, test_idx) in enumerate(cv.split(D_tar, lab_tar)):
-                print(f'Fold {j+1}')
+                print(f'Iteration {i+1}, Fold {j+1}')
                 D_tar_train, D_tar_test = D_tar[train_idx], D_tar[test_idx]
                 lab_tar_train, lab_tar_test = lab_tar[train_idx], lab_tar[test_idx]
                 lab_tar_full_train, lab_tar_full_test = (lab_tar_full[train_idx],
@@ -347,7 +338,7 @@ def pooled_sampled_decoding():
         
             bal_acc = balanced_accuracy_score(y_true_all, y_pred_all)
             print(bal_acc)
-            pool_samp_mat[k-1, i] = bal_acc
+            pool_samp_mat[trial_idx, i] = bal_acc
 
             # save after every iteration in case of unexpected interrupt
             out_data['acc_mat'] = pool_samp_mat
