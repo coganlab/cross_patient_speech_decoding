@@ -42,7 +42,7 @@ class PositionalEncoding(nn.Module):
 
 class CNNTransformer(L.LightningModule):
     def __init__(self, in_channels, num_classes, d_model, kernel_size, stride=1, padding=0,
-                 n_head=8, num_layers=3, dim_fc=128, dropout=0.3, learning_rate=1e-3,
+                 n_head=8, num_layers=3, dim_fc=128, dropout=0.3, learning_rate=1e-3, l2_reg=1e-5,
                  criterion=nn.CrossEntropyLoss()):
         super(CNNTransformer, self).__init__()
         self.num_classes = num_classes
@@ -53,6 +53,7 @@ class CNNTransformer(L.LightningModule):
         self.transformer_encoder = nn.TransformerEncoder(encoder_layers, num_layers)
         self.fc = nn.Linear(d_model, num_classes)
         self.learning_rate = learning_rate
+        self.l2_reg = l2_reg
         self.criterion = criterion
 
     def forward(self, x):
@@ -99,7 +100,7 @@ class CNNTransformer(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        return torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_reg)
 
 
 class Transformer(L.LightningModule):
