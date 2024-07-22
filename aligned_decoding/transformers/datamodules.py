@@ -6,11 +6,12 @@ from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
 from sklearn.decomposition import PCA
 import sys
 
-sys.path.append('..')
-from alignment.AlignCCA import AlignCCA
+# sys.path.append('..')
+# from alignment.AlignCCA import AlignCCA
 
 class SimpleMicroDataModule(L.LightningDataModule):
-    def __init__(self, data, labels, batch_size=128, folds=20, val_size=0.2):
+    def __init__(self, data, labels, batch_size=128, folds=20, val_size=0.2,
+                 augmentations=None):
         super().__init__()
         self.data = data
         self.labels = labels
@@ -19,6 +20,7 @@ class SimpleMicroDataModule(L.LightningDataModule):
             self.batch_size = len(self.data)
         self.folds = folds
         self.val_size = val_size
+        self.augmentations = augmentations if augmentations else []
         self.current_fold = 0
         self.train_datasets = []
         self.val_datasets = []
@@ -39,7 +41,14 @@ class SimpleMicroDataModule(L.LightningDataModule):
             else:
                 val_data, val_labels = None, None
 
-            train_dataset = TensorDataset(train_data, train_labels)
+            aug_data = torch.Tensor([])
+            aug_labels = torch.Tensor([]).long()
+            for aug in self.augmentations:
+                aug_data = torch.cat((aug_data, aug(train_data)))
+                aug_labels = torch.cat((aug_labels, train_labels))
+
+            # train_dataset = TensorDataset(train_data, train_labels)
+            train_dataset = TensorDataset(aug_data, aug_labels)
             val_dataset = TensorDataset(val_data, val_labels)
             test_dataset = TensorDataset(test_data, test_labels)
 
@@ -90,19 +99,21 @@ class SimpleMicroDataModule(L.LightningDataModule):
         else:
             print('Type must be one of "train", "val", or "test"')
 
-class CCAMicroDataModule(L.LightningDataModule):
-    def __init__(self, data, labels, align_labels, pool_data,
-                 batch_size=128, folds=20, val_size=0.2):
+class AlignedMicroDataModule(L.LightningDataModule):
+    def __init__(self, data, labels, align_labels, pool_data, algner,
+                 batch_size=128, folds=20, val_size=0.2, augmentations=None):
         super().__init__()
         self.data = data
         self.labels = labels
         self.align_labels = align_labels
         self.pool_data = pool_data
+        self.algner = algner
         self.batch_size = batch_size
         if self.batch_size == -1:
             self.batch_size = len(self.data) + sum(len(x) for x, _, _ in pool_data)
         self.folds = folds
         self.val_size = val_size
+        self.augmentations = augmentations if augmentations else []
         self.current_fold = 0
         self.train_datasets = []
         self.val_datasets = []
@@ -125,17 +136,39 @@ class CCAMicroDataModule(L.LightningDataModule):
             else:
                 val_data, val_labels = None, None
 
+            # aug_data = torch.Tensor([])
+            # aug_labels = torch.Tensor([]).long()
+            # aug_align_labels = torch.Tensor([]).long()
+            # for aug in self.augmentations:
+            #     aug_data = torch.cat((aug_data, aug(train_data)))
+            #     aug_labels = torch.cat((aug_labels, train_labels))
+            #     aug_align_labels = torch.cat((aug_labels, align_labels))
+            #     aug_pool_data = [(aug(x), y, y_a) for x, y, y_a in self.pool_data]
+            #     pool_data = [(x, y, y_a) for x, y, y_a in aug_pool_data]
+
+
             # align pooled data to current data
             train_data, train_labels, dim_red = (
-                process_CCA(train_data, train_labels, align_labels,
-                            self.pool_data))
+                process_aligner(train_data, train_labels, align_labels,
+                                self.pool_data, self.algner))
+            # train_data, train_labels, dim_red = (
+            #     process_aligner(aug_data, aug_labels, aug_align_labels,
+            #                     self.pool_data, self.algner))
+
+            aug_data = torch.Tensor([])
+            aug_labels = torch.Tensor([]).long()
+            for aug in self.augmentations:
+                aug_data = torch.cat((aug_data, aug(train_data)))
+                aug_labels = torch.cat((aug_labels, train_labels))
+
             if val_data is not None:
                 val_data = dim_red.transform(val_data.reshape(-1, val_data.shape[-1]))
                 val_data = torch.Tensor(val_data.reshape(-1, train_data.shape[1], val_data.shape[-1]))
             test_data = dim_red.transform(test_data.reshape(-1, test_data.shape[-1]))
             test_data = torch.Tensor(test_data.reshape(-1, train_data.shape[1], test_data.shape[-1]))
 
-            train_dataset = TensorDataset(train_data, train_labels)
+            # train_dataset = TensorDataset(train_data, train_labels)
+            train_dataset = TensorDataset(aug_data, aug_labels)
             val_dataset = TensorDataset(val_data, val_labels)
             test_dataset = TensorDataset(test_data, test_labels)
 
@@ -187,7 +220,7 @@ class CCAMicroDataModule(L.LightningDataModule):
             print('Type must be one of "train", "val", or "test"')
 
 
-def process_CCA(X, y, y_align, pool_data, n_components=0.95):
+def process_aligner(X, y, y_align, pool_data, algner, n_components=0.95):
     cross_pt_trials = [x.shape[0] for x, _, _ in pool_data]
     X_cross_r = [x.reshape(-1, x.shape[-1]) for x, _, _ in pool_data]
     X_tar_r = X.reshape(-1, X.shape[-1])
@@ -212,7 +245,7 @@ def process_CCA(X, y, y_align, pool_data, n_components=0.95):
     y_align_cross = [y_a for _, _, y_a in pool_data]
 
     # align data to target patient
-    aligns = [AlignCCA() for _ in range(len(pool_data))]
+    aligns = [algner() for _ in range(len(pool_data))]
     X_algn_dr = []
     for i, algn in enumerate(aligns):
         algn.fit(X_tar_dr, X_cross_dr[i], y_align.numpy(), y_align_cross[i].numpy())
