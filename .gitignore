@@ -145,3 +145,4 @@ dmypy.json
 .idea/
 **/checkpoints/
 **/lightning_logs/
+**/fold_data

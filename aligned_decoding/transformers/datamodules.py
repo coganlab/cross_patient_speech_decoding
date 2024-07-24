@@ -4,14 +4,16 @@ from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
 from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
 from sklearn.decomposition import PCA
-import sys
+import h5py
+import os
+from pathlib import Path
 
 # sys.path.append('..')
 # from alignment.AlignCCA import AlignCCA
 
 class SimpleMicroDataModule(L.LightningDataModule):
     def __init__(self, data, labels, batch_size=128, folds=20, val_size=0.2,
-                 augmentations=None):
+                 augmentations=None, data_path=None):
         super().__init__()
         self.data = data
         self.labels = labels
@@ -22,13 +24,14 @@ class SimpleMicroDataModule(L.LightningDataModule):
         self.val_size = val_size
         self.augmentations = augmentations if augmentations else []
         self.current_fold = 0
-        self.train_datasets = []
-        self.val_datasets = []
-        self.test_datasets = []
+        self.data_path = Path(os.getcwd() if data_path is None else data_path)
+        # self.train_datasets = []
+        # self.val_datasets = []
+        # self.test_datasets = []
 
     def setup(self, stage=None):
         cv = self.select_cv(self.folds)
-        for train_idx, test_idx in cv.split(self.data, self.labels):
+        for k, (train_idx, test_idx) in enumerate(cv.split(self.data, self.labels)):
             train_data, test_data = self.data[train_idx], self.data[test_idx]
             train_labels, test_labels = (self.labels[train_idx],
                                          self.labels[test_idx])
@@ -47,32 +50,82 @@ class SimpleMicroDataModule(L.LightningDataModule):
                 aug_data = torch.cat((aug_data, aug(train_data)))
                 aug_labels = torch.cat((aug_labels, train_labels))
 
-            # train_dataset = TensorDataset(train_data, train_labels)
-            train_dataset = TensorDataset(aug_data, aug_labels)
-            val_dataset = TensorDataset(val_data, val_labels)
-            test_dataset = TensorDataset(test_data, test_labels)
+            self.data_shape = aug_data.shape
 
-            self.train_datasets.append(train_dataset)
-            self.val_datasets.append(val_dataset)
-            self.test_datasets.append(test_dataset)
+            # train_dataset = TensorDataset(train_data, train_labels)
+            # train_dataset = TensorDataset(aug_data, aug_labels)
+            # val_dataset = TensorDataset(val_data, val_labels)
+            # test_dataset = TensorDataset(test_data, test_labels)
+
+            # self.train_datasets.append(train_dataset)
+            # self.val_datasets.append(val_dataset)
+            # self.test_datasets.append(test_dataset)
+
+            # save fold precomputed fold data to hdf5 file to load in later
+            os.makedirs(self.data_path / 'fold_data', exist_ok=True)
+            with h5py.File(self.data_path / 'fold_data' / f'fold_{k}.h5', 'w') as f:
+                # f.create_dataset('train_data', data=train_data)
+                # f.create_dataset('train_labels', data=train_labels)
+                f.create_dataset('train_data', data=aug_data)
+                f.create_dataset('train_labels', data=aug_labels)
+                f.create_dataset('val_data', data=val_data)
+                f.create_dataset('val_labels', data=val_labels)
+                f.create_dataset('test_data', data=test_data)
+                f.create_dataset('test_labels', data=test_labels)
 
     def train_dataloader(self):
         # get the train dataset for the current fold
-        return DataLoader(self.train_datasets[self.current_fold],
+        # return DataLoader(self.train_datasets[self.current_fold],
+        #                   batch_size=self.batch_size, shuffle=True,
+        #                   # num_workers=7, persistent_workers=True,
+        #                   )
+        
+        # get train data from the current fold from saved hdf5 file
+        with h5py.File(self.data_path / 'fold_data' / f'fold_{self.current_fold}.h5', 'r') as f:
+            train_data = f['train_data'][()]
+            train_labels = f['train_labels'][()]
+        
+        train_data = torch.Tensor(train_data)
+        train_labels = torch.Tensor(train_labels).long()
+        return DataLoader(TensorDataset(train_data, train_labels),
                           batch_size=self.batch_size, shuffle=True,
                           # num_workers=7, persistent_workers=True,
                           )
 
     def val_dataloader(self):
         # get the val dataset for the current fold
-        return DataLoader(self.val_datasets[self.current_fold],
+        # return DataLoader(self.val_datasets[self.current_fold],
+        #                   batch_size=self.batch_size, shuffle=False,
+        #                   # num_workers=7, persistent_workers=True,
+        #                   )
+
+        # get val data from the current fold from saved hdf5 file
+        with h5py.File(self.data_path / 'fold_data' / f'fold_{self.current_fold}.h5', 'r') as f:
+            val_data = f['val_data'][()]
+            val_labels = f['val_labels'][()]
+
+        val_data = torch.Tensor(val_data)
+        val_labels = torch.Tensor(val_labels).long()
+        return DataLoader(TensorDataset(val_data, val_labels),
                           batch_size=self.batch_size, shuffle=False,
                           # num_workers=7, persistent_workers=True,
                           )
 
     def test_dataloader(self):
-        # get the test dataset for the current fold
-        return DataLoader(self.test_datasets[self.current_fold],
+        # # get the test dataset for the current fold
+        # return DataLoader(self.test_datasets[self.current_fold],
+        #                   batch_size=self.batch_size, shuffle=False,
+        #                   # num_workers=7, persistent_workers=True,
+        #                   )
+
+        # get test data from the current fold from saved hdf5 file
+        with h5py.File(self.data_path / 'fold_data' / f'fold_{self.current_fold}.h5', 'r') as f:
+            test_data = f['test_data'][()]
+            test_labels = f['test_labels'][()]
+
+        test_data = torch.Tensor(test_data)
+        test_labels = torch.Tensor(test_labels).long()
+        return DataLoader(TensorDataset(test_data, test_labels),
                           batch_size=self.batch_size, shuffle=False,
                           # num_workers=7, persistent_workers=True,
                           )
@@ -89,19 +142,20 @@ class SimpleMicroDataModule(L.LightningDataModule):
             cv = StratifiedKFold(n_splits=folds, shuffle=True)
         return cv
 
-    def get_data_shape(self, type='train'):
-        if type == 'train':
-            return self.train_datasets[self.current_fold].tensors[0].shape
-        elif type == 'val':
-            return self.val_datasets[self.current_fold].tensors[0].shape
-        elif type == 'test':
-            return self.test_datasets[self.current_fold].tensors[0].shape
-        else:
-            print('Type must be one of "train", "val", or "test"')
+    # def get_data_shape(self, type='train'):
+    #     if type == 'train':
+    #         return self.train_datasets[self.current_fold].tensors[0].shape
+    #     elif type == 'val':
+    #         return self.val_datasets[self.current_fold].tensors[0].shape
+    #     elif type == 'test':
+    #         return self.test_datasets[self.current_fold].tensors[0].shape
+    #     else:
+    #         print('Type must be one of "train", "val", or "test"')
 
 class AlignedMicroDataModule(L.LightningDataModule):
     def __init__(self, data, labels, align_labels, pool_data, algner,
-                 batch_size=128, folds=20, val_size=0.2, augmentations=None):
+                 batch_size=128, folds=20, val_size=0.2, augmentations=None,
+                 data_path=None):
         super().__init__()
         self.data = data
         self.labels = labels
@@ -114,14 +168,15 @@ class AlignedMicroDataModule(L.LightningDataModule):
         self.folds = folds
         self.val_size = val_size
         self.augmentations = augmentations if augmentations else []
+        self.data_path = Path(os.getcwd() if data_path is None else data_path)
         self.current_fold = 0
-        self.train_datasets = []
-        self.val_datasets = []
-        self.test_datasets = []
+        # self.train_datasets = []
+        # self.val_datasets = []
+        # self.test_datasets = []
 
     def setup(self, stage=None):
         cv = self.select_cv(self.folds)
-        for train_idx, test_idx in cv.split(self.data, self.labels):
+        for k, (train_idx, test_idx) in enumerate(cv.split(self.data, self.labels)):
             train_data, test_data = self.data[train_idx], self.data[test_idx]
             train_labels, test_labels = (self.labels[train_idx],
                                          self.labels[test_idx])
@@ -136,30 +191,33 @@ class AlignedMicroDataModule(L.LightningDataModule):
             else:
                 val_data, val_labels = None, None
 
-            # aug_data = torch.Tensor([])
-            # aug_labels = torch.Tensor([]).long()
-            # aug_align_labels = torch.Tensor([]).long()
-            # for aug in self.augmentations:
-            #     aug_data = torch.cat((aug_data, aug(train_data)))
-            #     aug_labels = torch.cat((aug_labels, train_labels))
-            #     aug_align_labels = torch.cat((aug_labels, align_labels))
-            #     aug_pool_data = [(aug(x), y, y_a) for x, y, y_a in self.pool_data]
-            #     pool_data = [(x, y, y_a) for x, y, y_a in aug_pool_data]
-
-
-            # align pooled data to current data
-            train_data, train_labels, dim_red = (
-                process_aligner(train_data, train_labels, align_labels,
-                                self.pool_data, self.algner))
-            # train_data, train_labels, dim_red = (
-            #     process_aligner(aug_data, aug_labels, aug_align_labels,
-            #                     self.pool_data, self.algner))
-
             aug_data = torch.Tensor([])
             aug_labels = torch.Tensor([]).long()
+            aug_align_labels = torch.Tensor([[], [], []]).long().T
+            aug_pool_data = [[torch.Tensor([]), torch.Tensor([]).long(), torch.Tensor([[],[],[]]).long().T] for _ in self.pool_data]
             for aug in self.augmentations:
                 aug_data = torch.cat((aug_data, aug(train_data)))
                 aug_labels = torch.cat((aug_labels, train_labels))
+                aug_align_labels = torch.cat((aug_align_labels, align_labels))
+                for i, (x, y, y_a) in enumerate(self.pool_data):
+                    aug_pool_data[i][0] = torch.cat((aug_pool_data[i][0], aug(x)))
+                    aug_pool_data[i][1] = torch.cat((aug_pool_data[i][1], y))
+                    aug_pool_data[i][2] = torch.cat((aug_pool_data[i][2], y_a))
+
+
+            # align pooled data to current data
+            # train_data, train_labels, dim_red = (
+            #     process_aligner(train_data, train_labels, align_labels,
+            #                     self.pool_data, self.algner))
+            aug_data, aug_labels, dim_red = (
+                process_aligner(aug_data, aug_labels, aug_align_labels,
+                                aug_pool_data, self.algner))
+
+            # aug_data = torch.Tensor([])
+            # aug_labels = torch.Tensor([]).long()
+            # for aug in self.augmentations:
+            #     aug_data = torch.cat((aug_data, aug(train_data)))
+            #     aug_labels = torch.cat((aug_labels, train_labels))
 
             if val_data is not None:
                 val_data = dim_red.transform(val_data.reshape(-1, val_data.shape[-1]))
@@ -168,31 +226,81 @@ class AlignedMicroDataModule(L.LightningDataModule):
             test_data = torch.Tensor(test_data.reshape(-1, train_data.shape[1], test_data.shape[-1]))
 
             # train_dataset = TensorDataset(train_data, train_labels)
-            train_dataset = TensorDataset(aug_data, aug_labels)
-            val_dataset = TensorDataset(val_data, val_labels)
-            test_dataset = TensorDataset(test_data, test_labels)
+            # train_dataset = TensorDataset(aug_data, aug_labels)
+            # val_dataset = TensorDataset(val_data, val_labels)
+            # test_dataset = TensorDataset(test_data, test_labels)
 
-            self.train_datasets.append(train_dataset)
-            self.val_datasets.append(val_dataset)
-            self.test_datasets.append(test_dataset)
+            # self.train_datasets.append(train_dataset)
+            # self.val_datasets.append(val_dataset)
+            # self.test_datasets.append(test_dataset)
+
+            self.data_shape = aug_data.shape
+
+            # save fold precomputed fold data to hdf5 file to load in later
+            os.makedirs(self.data_path / 'fold_data', exist_ok=True)
+            with h5py.File(self.data_path / 'fold_data' / f'fold_{k}.h5', 'w') as f:
+                # f.create_dataset('train_data', data=train_data)
+                # f.create_dataset('train_labels', data=train_labels)
+                f.create_dataset('train_data', data=aug_data)
+                f.create_dataset('train_labels', data=aug_labels)
+                f.create_dataset('val_data', data=val_data)
+                f.create_dataset('val_labels', data=val_labels)
+                f.create_dataset('test_data', data=test_data)
+                f.create_dataset('test_labels', data=test_labels)
 
     def train_dataloader(self):
         # get the train dataset for the current fold
-        return DataLoader(self.train_datasets[self.current_fold],
+        # return DataLoader(self.train_datasets[self.current_fold],
+        #                   batch_size=self.batch_size, shuffle=True,
+        #                   # num_workers=7, persistent_workers=True,
+        #                   )
+        
+        # get train data from the current fold from saved hdf5 file
+        with h5py.File(self.data_path / 'fold_data' / f'fold_{self.current_fold}.h5', 'r') as f:
+            train_data = f['train_data'][()]
+            train_labels = f['train_labels'][()]
+        
+        train_data = torch.Tensor(train_data)
+        train_labels = torch.Tensor(train_labels).long()
+        return DataLoader(TensorDataset(train_data, train_labels),
                           batch_size=self.batch_size, shuffle=True,
                           # num_workers=7, persistent_workers=True,
                           )
 
     def val_dataloader(self):
         # get the val dataset for the current fold
-        return DataLoader(self.val_datasets[self.current_fold],
+        # return DataLoader(self.val_datasets[self.current_fold],
+        #                   batch_size=self.batch_size, shuffle=False,
+        #                   # num_workers=7, persistent_workers=True,
+        #                   )
+
+        # get val data from the current fold from saved hdf5 file
+        with h5py.File(self.data_path / 'fold_data' / f'fold_{self.current_fold}.h5', 'r') as f:
+            val_data = f['val_data'][()]
+            val_labels = f['val_labels'][()]
+
+        val_data = torch.Tensor(val_data)
+        val_labels = torch.Tensor(val_labels).long()
+        return DataLoader(TensorDataset(val_data, val_labels),
                           batch_size=self.batch_size, shuffle=False,
                           # num_workers=7, persistent_workers=True,
                           )
 
     def test_dataloader(self):
-        # get the test dataset for the current fold
-        return DataLoader(self.test_datasets[self.current_fold],
+        # # get the test dataset for the current fold
+        # return DataLoader(self.test_datasets[self.current_fold],
+        #                   batch_size=self.batch_size, shuffle=False,
+        #                   # num_workers=7, persistent_workers=True,
+        #                   )
+
+        # get test data from the current fold from saved hdf5 file
+        with h5py.File(self.data_path / 'fold_data' / f'fold_{self.current_fold}.h5', 'r') as f:
+            test_data = f['test_data'][()]
+            test_labels = f['test_labels'][()]
+
+        test_data = torch.Tensor(test_data)
+        test_labels = torch.Tensor(test_labels).long()
+        return DataLoader(TensorDataset(test_data, test_labels),
                           batch_size=self.batch_size, shuffle=False,
                           # num_workers=7, persistent_workers=True,
                           )
@@ -209,15 +317,15 @@ class AlignedMicroDataModule(L.LightningDataModule):
             cv = StratifiedKFold(n_splits=folds, shuffle=True)
         return cv
 
-    def get_data_shape(self, type='train'):
-        if type == 'train':
-            return self.train_datasets[self.current_fold].tensors[0].shape
-        elif type == 'val':
-            return self.val_datasets[self.current_fold].tensors[0].shape
-        elif type == 'test':
-            return self.test_datasets[self.current_fold].tensors[0].shape
-        else:
-            print('Type must be one of "train", "val", or "test"')
+    # def get_data_shape(self, type='train'):
+    #     if type == 'train':
+    #         return self.train_datasets[self.current_fold].tensors[0].shape
+    #     elif type == 'val':
+    #         return self.val_datasets[self.current_fold].tensors[0].shape
+    #     elif type == 'test':
+    #         return self.test_datasets[self.current_fold].tensors[0].shape
+    #     else:
+    #         print('Type must be one of "train", "val", or "test"')
 
 
 def process_aligner(X, y, y_align, pool_data, algner, n_components=0.95):
