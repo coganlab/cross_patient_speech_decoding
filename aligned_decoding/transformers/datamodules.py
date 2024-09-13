@@ -25,6 +25,7 @@ class SimpleMicroDataModule(L.LightningDataModule):
         self.augmentations = augmentations if augmentations else []
         self.current_fold = 0
         self.data_path = Path(os.getcwd() if data_path is None else data_path)
+        # self.data_shapes_folds = []
         # self.train_datasets = []
         # self.val_datasets = []
         # self.test_datasets = []
@@ -50,7 +51,7 @@ class SimpleMicroDataModule(L.LightningDataModule):
                 aug_data = torch.cat((aug_data, aug(train_data)))
                 aug_labels = torch.cat((aug_labels, train_labels))
 
-            self.data_shape = aug_data.shape
+            # self.data_shapes_folds.append(aug_data.shape)
 
             # train_dataset = TensorDataset(train_data, train_labels)
             # train_dataset = TensorDataset(aug_data, aug_labels)
@@ -142,15 +143,11 @@ class SimpleMicroDataModule(L.LightningDataModule):
             cv = StratifiedKFold(n_splits=folds, shuffle=True)
         return cv
 
-    # def get_data_shape(self, type='train'):
-    #     if type == 'train':
-    #         return self.train_datasets[self.current_fold].tensors[0].shape
-    #     elif type == 'val':
-    #         return self.val_datasets[self.current_fold].tensors[0].shape
-    #     elif type == 'test':
-    #         return self.test_datasets[self.current_fold].tensors[0].shape
-    #     else:
-    #         print('Type must be one of "train", "val", or "test"')
+    def get_data_shape(self):
+            with h5py.File(self.data_path / 'fold_data' / f'fold_{self.current_fold}.h5', 'r') as f:
+                data_shape = f['train_data'][()].shape
+            return data_shape
+
 
 class AlignedMicroDataModule(L.LightningDataModule):
     def __init__(self, data, labels, align_labels, pool_data, algner,
@@ -170,6 +167,7 @@ class AlignedMicroDataModule(L.LightningDataModule):
         self.augmentations = augmentations if augmentations else []
         self.data_path = Path(os.getcwd() if data_path is None else data_path)
         self.current_fold = 0
+        # self.data_shapes_folds = []
         # self.train_datasets = []
         # self.val_datasets = []
         # self.test_datasets = []
@@ -191,10 +189,14 @@ class AlignedMicroDataModule(L.LightningDataModule):
             else:
                 val_data, val_labels = None, None
 
-            aug_data = torch.Tensor([])
-            aug_labels = torch.Tensor([]).long()
-            aug_align_labels = torch.Tensor([[], [], []]).long().T
-            aug_pool_data = [[torch.Tensor([]), torch.Tensor([]).long(), torch.Tensor([[],[],[]]).long().T] for _ in self.pool_data]
+            aug_data = torch.cat((torch.Tensor([]), train_data))
+            aug_labels = torch.cat((torch.Tensor([]).long(), train_labels))
+            aug_align_labels = torch.cat((torch.Tensor([[], [], []]).long().T, align_labels))
+            aug_pool_data = [[
+                torch.cat((torch.Tensor([]),x)),
+                torch.cat((torch.Tensor([]).long(),y)),
+                torch.cat((torch.Tensor([[],[],[]]).long().T, y_a))
+                ] for (x, y, y_a) in self.pool_data]
             for aug in self.augmentations:
                 aug_data = torch.cat((aug_data, aug(train_data)))
                 aug_labels = torch.cat((aug_labels, train_labels))
@@ -234,7 +236,7 @@ class AlignedMicroDataModule(L.LightningDataModule):
             # self.val_datasets.append(val_dataset)
             # self.test_datasets.append(test_dataset)
 
-            self.data_shape = aug_data.shape
+            # self.data_shapes_folds.append(aug_data.shape)
 
             # save fold precomputed fold data to hdf5 file to load in later
             os.makedirs(self.data_path / 'fold_data', exist_ok=True)
@@ -317,16 +319,11 @@ class AlignedMicroDataModule(L.LightningDataModule):
             cv = StratifiedKFold(n_splits=folds, shuffle=True)
         return cv
 
-    # def get_data_shape(self, type='train'):
-    #     if type == 'train':
-    #         return self.train_datasets[self.current_fold].tensors[0].shape
-    #     elif type == 'val':
-    #         return self.val_datasets[self.current_fold].tensors[0].shape
-    #     elif type == 'test':
-    #         return self.test_datasets[self.current_fold].tensors[0].shape
-    #     else:
-    #         print('Type must be one of "train", "val", or "test"')
-
+    def get_data_shape(self):
+            with h5py.File(self.data_path / 'fold_data' / f'fold_{self.current_fold}.h5', 'r') as f:
+                data_shape = f['train_data'][()].shape
+            return data_shape
+    
 
 def process_aligner(X, y, y_align, pool_data, algner, n_components=0.95):
     cross_pt_trials = [x.shape[0] for x, _, _ in pool_data]
