@@ -32,11 +32,13 @@ class crossPtDecoder(BaseEstimator):
 class crossPtDecoder_sepDimRed(crossPtDecoder):
     """ Cross-Patient Decoder with separate PCA for each patient. """
 
-    def __init__(self, cross_pt_data, decoder, dim_red=PCA, n_comp=10):
+    def __init__(self, cross_pt_data, decoder, dim_red=PCA, n_comp=0.8,
+                 tar_in_train=True):
         self.cross_pt_data = cross_pt_data
         self.decoder = decoder
         self.dim_red = dim_red
         self.n_comp = n_comp
+        self.tar_in_train = tar_in_train
 
     def preprocess_train(self, X, y, **kwargs):
         cross_pt_trials = [x.shape[0] for x, _, _ in self.cross_pt_data]
@@ -54,6 +56,12 @@ class crossPtDecoder_sepDimRed(crossPtDecoder):
         X_tar_dr = tar_dr.fit_transform(X_tar_r)
         self.tar_dr = tar_dr
 
+        # use the same latent dimensionality for all patients
+        lat_dims = [X_tar_dr.shape[-1]] + [x.shape[-1] for x in X_cross_dr]
+        self.common_dim = min(lat_dims)
+        X_tar_dr = X_tar_dr[:, :self.common_dim]
+        X_cross_dr = [x[:, :self.common_dim] for x in X_cross_dr]
+
         # reshape for concatenation
         X_cross_dr = [x.reshape(cross_pt_trials[i], -1, x.shape[-1]) for i, x
                       in enumerate(X_cross_dr)]
@@ -61,13 +69,18 @@ class crossPtDecoder_sepDimRed(crossPtDecoder):
         X_tar_dr = X_tar_dr.reshape(X.shape[0], -1)
 
         # concatenate cross-patient data
-        X_dr = np.vstack([X_tar_dr] + X_cross_dr)
-        y_dr = np.hstack([y] + [y for _, y, _ in self.cross_pt_data])
-        return X_dr, y_dr
+        if self.tar_in_train:
+            X_pool = np.vstack([X_tar_dr] + X_cross_dr)
+            y_pool = np.hstack([y] + [y for _, y, _ in self.cross_pt_data])
+        else:
+            X_pool = np.vstack(X_cross_dr)
+            y_pool = np.hstack([y for _, y, _ in self.cross_pt_data])
+        return X_pool, y_pool
 
     def preprocess_test(self, X):
         X_r = X.reshape(-1, X.shape[-1])
         X_dr = self.tar_dr.transform(X_r)
+        X_dr = X_dr[:, :self.common_dim]
         return X_dr.reshape(X.shape[0], -1)
 
 
@@ -76,12 +89,13 @@ class crossPtDecoder_sepAlign(crossPtDecoder):
     reductions for different patients."""
 
     def __init__(self, cross_pt_data, decoder, aligner, dim_red=PCA,
-                 n_comp=10):
+                 n_comp=0.8, tar_in_train=True):
         self.cross_pt_data = cross_pt_data
         self.decoder = decoder
         self.dim_red = dim_red
         self.n_comp = n_comp
         self.aligner = aligner
+        self.tar_in_train = tar_in_train
 
     def preprocess_train(self, X, y, y_align=None):
         cross_pt_trials = [x.shape[0] for x, _, _ in self.cross_pt_data]
@@ -120,8 +134,15 @@ class crossPtDecoder_sepAlign(crossPtDecoder):
         X_tar_dr = X_tar_dr.reshape(X_tar_dr.shape[0], -1)
 
         # concatenate cross-patient data
-        X_pool = np.vstack([X_tar_dr] + X_algn_dr)
-        y_pool = np.hstack([y] + [y for _, y, _ in self.cross_pt_data])
+        # X_pool = np.vstack([X_tar_dr] + X_algn_dr)
+        # y_pool = np.hstack([y] + [y for _, y, _ in self.cross_pt_data])
+        # concatenate cross-patient data
+        if self.tar_in_train:
+            X_pool = np.vstack([X_tar_dr] + X_algn_dr)
+            y_pool = np.hstack([y] + [y for _, y, _ in self.cross_pt_data])
+        else:
+            X_pool = np.vstack(X_algn_dr)
+            y_pool = np.hstack([y for _, y, _ in self.cross_pt_data])
         return X_pool, y_pool
 
     def preprocess_test(self, X):
@@ -134,11 +155,13 @@ class crossPtDecoder_jointDimRed(crossPtDecoder):
     """ Cross-Patient Decoder with joint dimensionality reduction to align and
     pool patients."""
 
-    def __init__(self, cross_pt_data, decoder, joint_dr_method, n_comp=10):
+    def __init__(self, cross_pt_data, decoder, joint_dr_method, n_comp=0.8,
+                 tar_in_train=True):
         self.cross_pt_data = cross_pt_data
         self.decoder = decoder
         self.joint_dr_method = joint_dr_method
         self.n_comp = n_comp
+        self.tar_in_train = tar_in_train
 
     def preprocess_train(self, X, y, y_align=None):
         # option for separate alignment labels
@@ -161,10 +184,15 @@ class crossPtDecoder_jointDimRed(crossPtDecoder):
         X_tar_dr = X_tar_dr.reshape(X_tar_dr.shape[0], -1)
         
         # concatenate cross-patient data
-        X_pool = np.vstack([X_tar_dr] + X_algn_dr)
-        y_pool = np.hstack([y] + [y for _, y, _ in self.cross_pt_data])
+        # X_pool = np.vstack([X_tar_dr] + X_algn_dr)
+        # y_pool = np.hstack([y] + [y for _, y, _ in self.cross_pt_data])
+        if self.tar_in_train:
+            X_pool = np.vstack([X_tar_dr] + X_algn_dr)
+            y_pool = np.hstack([y] + [y for _, y, _ in self.cross_pt_data])
+        else:
+            X_pool = np.vstack(X_algn_dr)
+            y_pool = np.hstack([y for _, y, _ in self.cross_pt_data])
         return X_pool, y_pool
-
 
     def preprocess_test(self, X):
         X_dr = self.joint_dr.transform(X, idx=0)
@@ -175,13 +203,14 @@ class crossPtDecoder_mcca(crossPtDecoder):
     """ Cross-patient Decoder with MCCA to align and pool patients. """
 
     def __init__(self, cross_pt_data, decoder, aligner, n_comp=10, regs=0.5,
-                 pca_var=1):
+                 pca_var=1, tar_in_train=True):
         self.cross_pt_data = cross_pt_data
         self.decoder = decoder
         self.aligner = aligner
         self.n_comp = n_comp
         self.regs = regs
         self.pca_var = pca_var
+        self.tar_in_train = tar_in_train
 
     def preprocess_train(self, X, y, y_align=None):
         # option for separate alignment labels
@@ -204,10 +233,15 @@ class crossPtDecoder_mcca(crossPtDecoder):
         X_tar_dr = X_tar_dr.reshape(X_tar_dr.shape[0], -1)
         
         # concatenate cross-patient data
-        X_pool = np.vstack([X_tar_dr] + X_algn_dr)
-        y_pool = np.hstack([y] + [y for _, y, _ in self.cross_pt_data])
+        # X_pool = np.vstack([X_tar_dr] + X_algn_dr)
+        # y_pool = np.hstack([y] + [y for _, y, _ in self.cross_pt_data])
+        if self.tar_in_train:
+            X_pool = np.vstack([X_tar_dr] + X_algn_dr)
+            y_pool = np.hstack([y] + [y for _, y, _ in self.cross_pt_data])
+        else:
+            X_pool = np.vstack(X_algn_dr)
+            y_pool = np.hstack([y for _, y, _ in self.cross_pt_data])
         return X_pool, y_pool
-
 
     def preprocess_test(self, X):
         X_mcca = self.aligner.transform(X, idx=0)
