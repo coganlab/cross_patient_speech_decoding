@@ -17,7 +17,8 @@ class BaseLightningModel(L.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.criterion(y_hat, y)
-        res = {'train_loss': loss}
+        acc = cmat_acc(y_hat, y, self.num_classes)
+        res = {'train_loss': loss, 'train_acc': acc}
         self.log_dict(res, prog_bar=True)
         return loss
     
@@ -25,7 +26,8 @@ class BaseLightningModel(L.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.criterion(y_hat, y)
-        res = {'val_loss': loss}
+        acc = cmat_acc(y_hat, y, self.num_classes)
+        res = {'val_loss': loss, 'val_acc': acc}
         self.log_dict(res, prog_bar=True)
         return loss
     
@@ -33,7 +35,8 @@ class BaseLightningModel(L.LightningModule):
         x, y = batch
         y_hat = self(x)
         loss = self.criterion(y_hat, y)
-        res = {'test_loss': loss}
+        acc = cmat_acc(y_hat, y, self.num_classes)
+        res = {'test_loss': loss, 'test_acc': acc}
         self.log_dict(res, prog_bar=True)
         return loss
     
@@ -47,10 +50,9 @@ class BaseLightningModel(L.LightningModule):
     
 
 class TemporalConvRNN(BaseLightningModel):
-    def __init__(self, in_channels, n_filters, num_classes, hidden_size,
+    def __init__(self, in_channels, n_filters, num_classes, hidden_size, n_layers,
                  kernel_size, dim_fc=None, stride=1, padding=0, cnn_dropout=0.3,
-                 rnn_dropout=0.3,
-                 learning_rate=1e-3, l2_reg=1e-5,
+                 rnn_dropout=0.3, learning_rate=1e-3, l2_reg=1e-5,
                  criterion=nn.CrossEntropyLoss(), activation=True):
         super(TemporalConvRNN, self).__init__(learning_rate=learning_rate,
                                               l2_reg=l2_reg, criterion=criterion)
@@ -59,17 +61,17 @@ class TemporalConvRNN(BaseLightningModel):
                                             stride, padding, cnn_dropout,
                                             activation=activation)
         if dim_fc is None:
-            self.rnn = SimpleGRU(n_filters, hidden_size, num_classes, 1,
+            self.rnn = SimpleGRU(n_filters, hidden_size, num_classes, n_layers,
                                     dropout=rnn_dropout)
             self.fc = None
         elif isinstance(dim_fc, list):
-             self.rnn = SimpleGRU(n_filters, hidden_size, dim_fc[0], 1,
+             self.rnn = SimpleGRU(n_filters, hidden_size, dim_fc[0], n_layers,
                                     dropout=rnn_dropout)
              self.fc = nn.Sequential(*[nn.Linear(dim_fc[i], dim_fc[i+1])
                                         for i in range(len(dim_fc)-1)] +
                                         [nn.Linear(dim_fc[-1], num_classes)])
         else:
-            self.rnn = SimpleGRU(n_filters, hidden_size, dim_fc, 1,
+            self.rnn = SimpleGRU(n_filters, hidden_size, dim_fc, n_layers,
                                     dropout=rnn_dropout)
             self.fc = nn.Linear(dim_fc, num_classes)
 
