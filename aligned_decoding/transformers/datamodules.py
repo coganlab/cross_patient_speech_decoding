@@ -205,7 +205,9 @@ class AlignedMicroDataModule(L.LightningDataModule):
                     aug_pool_data[i][0] = torch.cat((aug_pool_data[i][0], aug(x)))
                     aug_pool_data[i][1] = torch.cat((aug_pool_data[i][1], y))
                     aug_pool_data[i][2] = torch.cat((aug_pool_data[i][2], y_a))
-
+            
+            # clear unnecessary data after augmentations
+            del train_data, train_labels, align_labels
 
             # align pooled data to current data
             # train_data, train_labels, dim_red = (
@@ -222,10 +224,12 @@ class AlignedMicroDataModule(L.LightningDataModule):
             #     aug_labels = torch.cat((aug_labels, train_labels))
 
             if val_data is not None:
-                val_data = dim_red.transform(val_data.reshape(-1, val_data.shape[-1]))
-                val_data = torch.Tensor(val_data.reshape(-1, train_data.shape[1], val_data.shape[-1]))
-            test_data = dim_red.transform(test_data.reshape(-1, test_data.shape[-1]))
-            test_data = torch.Tensor(test_data.reshape(-1, train_data.shape[1], test_data.shape[-1]))
+                val_shape = val_data.shape
+                val_data = dim_red.transform(val_data.reshape(-1, val_shape[-1]))
+                val_data = torch.Tensor(val_data.reshape(val_shape[0], val_shape[1], -1))
+            test_shape = test_data.shape
+            test_data = dim_red.transform(test_data.reshape(-1, test_shape[-1]))
+            test_data = torch.Tensor(test_data.reshape(test_shape[0], test_shape[1], -1))
 
             # train_dataset = TensorDataset(train_data, train_labels)
             # train_dataset = TensorDataset(aug_data, aug_labels)
