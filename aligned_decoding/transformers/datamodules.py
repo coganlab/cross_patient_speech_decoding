@@ -18,8 +18,6 @@ class SimpleMicroDataModule(L.LightningDataModule):
         self.data = data
         self.labels = labels
         self.batch_size = batch_size
-        if self.batch_size == -1:
-            self.batch_size = len(self.data)
         self.folds = folds
         self.val_size = val_size
         self.augmentations = augmentations if augmentations else []
@@ -85,11 +83,16 @@ class SimpleMicroDataModule(L.LightningDataModule):
         with h5py.File(self.data_path / 'fold_data' / f'fold_{self.current_fold}.h5', 'r') as f:
             train_data = f['train_data'][()]
             train_labels = f['train_labels'][()]
+
+        if self.batch_size == -1:
+            batch_len = len(train_data)
+        else:
+            batch_len = self.batch_size
         
         train_data = torch.Tensor(train_data)
         train_labels = torch.Tensor(train_labels).long()
         return DataLoader(TensorDataset(train_data, train_labels),
-                          batch_size=self.batch_size, shuffle=True,
+                          batch_size=batch_len, shuffle=True,
                           # num_workers=7, persistent_workers=True,
                           )
 
@@ -105,10 +108,15 @@ class SimpleMicroDataModule(L.LightningDataModule):
             val_data = f['val_data'][()]
             val_labels = f['val_labels'][()]
 
+        if self.batch_size == -1:
+            batch_len = len(val_data)
+        else:
+            batch_len = self.batch_size
+
         val_data = torch.Tensor(val_data)
         val_labels = torch.Tensor(val_labels).long()
         return DataLoader(TensorDataset(val_data, val_labels),
-                          batch_size=self.batch_size, shuffle=False,
+                          batch_size=batch_len, shuffle=False,
                           # num_workers=7, persistent_workers=True,
                           )
 
@@ -124,10 +132,15 @@ class SimpleMicroDataModule(L.LightningDataModule):
             test_data = f['test_data'][()]
             test_labels = f['test_labels'][()]
 
+        if self.batch_size == -1:
+            batch_len = len(test_data)
+        else:
+            batch_len = self.batch_size
+
         test_data = torch.Tensor(test_data)
         test_labels = torch.Tensor(test_labels).long()
         return DataLoader(TensorDataset(test_data, test_labels),
-                          batch_size=self.batch_size, shuffle=False,
+                          batch_size=batch_len, shuffle=False,
                           # num_workers=7, persistent_workers=True,
                           )
 
@@ -160,8 +173,6 @@ class AlignedMicroDataModule(L.LightningDataModule):
         self.pool_data = pool_data
         self.algner = algner
         self.batch_size = batch_size
-        if self.batch_size == -1:
-            self.batch_size = len(self.data) + sum(len(x) for x, _, _ in pool_data)
         self.folds = folds
         self.val_size = val_size
         self.augmentations = augmentations if augmentations else []
@@ -265,11 +276,16 @@ class AlignedMicroDataModule(L.LightningDataModule):
         with h5py.File(self.data_path / 'fold_data' / f'fold_{self.current_fold}.h5', 'r') as f:
             train_data = f['train_data'][()]
             train_labels = f['train_labels'][()]
+
+        if self.batch_size == -1:
+            batch_len = len(train_data)
+        else:
+            batch_len = self.batch_size
         
         train_data = torch.Tensor(train_data)
         train_labels = torch.Tensor(train_labels).long()
         return DataLoader(TensorDataset(train_data, train_labels),
-                          batch_size=self.batch_size, shuffle=True,
+                          batch_size=batch_len, shuffle=True,
                           # num_workers=7, persistent_workers=True,
                           )
 
@@ -285,10 +301,15 @@ class AlignedMicroDataModule(L.LightningDataModule):
             val_data = f['val_data'][()]
             val_labels = f['val_labels'][()]
 
+        if self.batch_size == -1:
+            batch_len = len(val_data)
+        else:
+            batch_len = self.batch_size
+
         val_data = torch.Tensor(val_data)
         val_labels = torch.Tensor(val_labels).long()
         return DataLoader(TensorDataset(val_data, val_labels),
-                          batch_size=self.batch_size, shuffle=False,
+                          batch_size=batch_len, shuffle=False,
                           # num_workers=7, persistent_workers=True,
                           )
 
@@ -304,10 +325,15 @@ class AlignedMicroDataModule(L.LightningDataModule):
             test_data = f['test_data'][()]
             test_labels = f['test_labels'][()]
 
+        if self.batch_size == -1:
+            batch_len = len(test_data)
+        else:
+            batch_len = self.batch_size
+
         test_data = torch.Tensor(test_data)
         test_labels = torch.Tensor(test_labels).long()
         return DataLoader(TensorDataset(test_data, test_labels),
-                          batch_size=self.batch_size, shuffle=False,
+                          batch_size=batch_len, shuffle=False,
                           # num_workers=7, persistent_workers=True,
                           )
 
