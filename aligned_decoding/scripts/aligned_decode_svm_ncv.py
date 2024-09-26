@@ -174,11 +174,11 @@ def aligned_decoding():
     # lab_type = 'artic'
 
     # dimensionality reduction type
-    # red_method = 'PCA'
-    # dim_red = PCA
+    red_method = 'PCA'
+    dim_red = PCA
 
-    red_method = 'PCA (no centering)'
-    dim_red = NoCenterPCA
+    # red_method = 'PCA (no centering)'
+    # dim_red = NoCenterPCA
 
     # check alignment type
     if sum([cca_align, mcca_align, joint_dim_red]) > 1:
@@ -275,21 +275,21 @@ def aligned_decoding():
     #                 )
     #             )
 
-    # decoder = SVC(
-    #     # kernel='linear',
-    #     kernel='rbf',
-    #     class_weight='balanced',
-    #     )
-    # clf = make_pipeline(
-    #             DimRedReshape(dim_red),
-    #             decoder
-    #             )
-
-    decoder = LinearDiscriminantAnalysis()
+    decoder = SVC(
+        # kernel='linear',
+        kernel='rbf',
+        class_weight='balanced',
+        )
     clf = make_pipeline(
                 DimRedReshape(dim_red),
                 decoder
                 )
+
+    # decoder = LinearDiscriminantAnalysis()
+    # clf = make_pipeline(
+    #             DimRedReshape(dim_red),
+    #             decoder
+    #             )
 
     iter_accs = []
     wrong_trs_iter = []
@@ -337,15 +337,19 @@ def aligned_decoding():
                 # define alignment method
                 if joint_dim_red:
                     model = crossPtDecoder_jointDimRed(cross_pt_data, clf,
-                                                       JointPCA)
+                                                       JointPCA,
+                                                       tar_in_train=tar_in_train)
                 elif cca_align:
                     model = crossPtDecoder_sepAlign(cross_pt_data, clf,
-                                                    AlignCCA, dim_red=dim_red)
+                                                    AlignCCA, dim_red=dim_red,
+                                                    tar_in_train=tar_in_train)
                 elif mcca_align:
-                    model = crossPtDecoder_mcca(cross_pt_data, clf, AlignMCCA)
+                    model = crossPtDecoder_mcca(cross_pt_data, clf, AlignMCCA,
+                                                tar_in_train=tar_in_train)
                 else:
                     model = crossPtDecoder_sepDimRed(cross_pt_data, clf,
-                                                     dim_red=dim_red)
+                                                     dim_red=dim_red,
+                                                     tar_in_train=tar_in_train)
                 # nested cross-validation
                 if do_cv:
                     # search = GridSearchCV(model, param_grid, cv=cv,

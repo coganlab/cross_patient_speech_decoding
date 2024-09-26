@@ -12,6 +12,7 @@ from sklearn.svm import SVC
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.ensemble import BaggingClassifier
 from sklearn.pipeline import make_pipeline, Pipeline
+from sklearn.metrics import confusion_matrix
 from skopt import BayesSearchCV
 
 sys.path.insert(0, '..')
@@ -29,7 +30,8 @@ import alignment.alignment_utils as utils
 
 
 def init_parser():
-    parser = argparse.ArgumentParser(description='TODO')
+    parser = argparse.ArgumentParser(description='Cross-patient decoding with'
+                                     'subsampling of pooeld data across patients.')
     parser.add_argument('-pt', '--patient', type=str, required=True,
                         help='Patient ID')
     parser.add_argument('-pi', '--p_ind', type=int, default=-1, required=False,
@@ -64,29 +66,17 @@ def str2bool(s):
     return s.lower() == 'true'
 
 
-class DimRedReshape(BaseEstimator):
+# def cmat_acc(y_true, y_pred):
+#     cmat = confusion_matrix(y_true, y_pred)
+#     acc_cmat = np.trace(cmat) / np.sum(cmat)
+#     return acc_cmat
 
-    def __init__(self, dim_red, n_components=10):
-        self.dim_red = dim_red
-        self.n_components = n_components
+# def cmat_wrap(y_true_iter, y_pred_iter):
+#     accs = []
+#     for y_true, y_pred in zip(y_true_iter, y_pred_iter):
+#         accs.append(cmat_acc(y_true, y_pred))
+#     return np.array(accs)
 
-    def fit(self, X, y=None):
-        # X_r = X.reshape(-1, X.shape[-1])
-        X_r = X.reshape(X.shape[0], -1)
-        self.transformer = self.dim_red(n_components=self.n_components)
-        self.transformer.fit(X_r)
-        return self
-
-    def transform(self, X, y=None):
-        # X_r = X.reshape(-1, X.shape[-1])
-        X_r = X.reshape(X.shape[0], -1)
-        X_dr = self.transformer.transform(X_r)
-        # X_dr = X_dr.reshape(X.shape[0], -1)
-        return X_dr
-
-    def fit_transform(self, X, y=None):
-        self.fit(X)
-        return self.transform(X)
     
 def pooled_sampled_decoding():
     parser = init_parser()
@@ -116,10 +106,12 @@ def pooled_sampled_decoding():
     do_cv = str2bool(inputs['cross_validate'])
 
     # constant params
-    n_iter = 5
+    n_iter = 50
     n_folds = 20
     # n_iter = 2
     # n_folds = 2
+    
+    trial_step = 25
 
     ###### CV GRID ######
     if do_cv:
@@ -170,11 +162,11 @@ def pooled_sampled_decoding():
     # lab_type = 'artic'
 
     # dimensionality reduction type
-    # red_method = 'PCA'
-    # dim_red = PCA
+    red_method = 'PCA'
+    dim_red = PCA
 
-    red_method = 'PCA (no centering)'
-    dim_red = NoCenterPCA
+    # red_method = 'PCA (no centering)'
+    # dim_red = NoCenterPCA
 
     # check alignment type
     if sum([cca_align, mcca_align, joint_dim_red]) > 1:
@@ -266,53 +258,66 @@ def pooled_sampled_decoding():
                                                        algn_type=algn_type)
     D_tar, lab_tar, lab_tar_full = tar_data
 
-    max_trs = max([x.shape[0] for x, _, _ in pre_data])
-    k_trials_per_pt = np.arange(1, max_trs + 1)
+    # max_trs = max([x.shape[0] for x, _, _ in pre_data])
+    max_trs = int(np.ceil(np.median([x.shape[0] for x, _, _ in pre_data]))) # only go to median amount of trials to avoid 
+    # k_trials_per_pt = np.arange(1, max_trs + 1, trial_step)
+    k_trials_per_pt = np.arange(5, max_trs + 1, trial_step)
+    print(f'Max trials: {max_trs}')
 
     pool_samp_mat = np.full((len(k_trials_per_pt), n_iter), np.nan)
     trial_vec = np.full(len(k_trials_per_pt), np.nan)
-    for k in k_trials_per_pt:
+    for trial_idx, k in enumerate(k_trials_per_pt):
         print(f'##### Sampling {k} trials per patient #####')
-        # sample k trials from each patient to make a subsampled cross-patient
-        # dataset
-        cross_pt_data = []
-        for x, y, y_a in pre_data:
-            if x.shape[0] < k:
-                # take all of the data if there are fewer than k trials
-                cross_pt_data.append((x, y, y_a))
-            else:
-                # sample k trials
-                samp_idx = np.random.choice(x.shape[0], k, replace=False)
-                cross_pt_data.append((x[samp_idx], y[samp_idx], y_a[samp_idx]))
-
-        # keep track of how many trials are sampled at each step for figure
-        num_trials = np.sum([x.shape[0] for x, _, _ in cross_pt_data])
-        trial_vec[k-1] = num_trials
-
         # do n iterations of standard aligned cross-patient decoding with
         # subsampled data
         for i in range(n_iter):
+
+            # sample k trials from each patient to make a subsampled cross-patient
+            # dataset
+            cross_pt_data = []
+            for x, y, y_a in pre_data:
+                if x.shape[0] < k:
+                    # take all of the data if there are fewer than k trials
+                    cross_pt_data.append((x, y, y_a))
+                else:
+                    # sample k trials
+                    # print(x.shape)
+                    samp_idx = np.random.choice(x.shape[0], k, replace=False)
+                    cross_pt_data.append((x[samp_idx], y[samp_idx], y_a[samp_idx]))
+                    # print(x[samp_idx].shape)
+
+            # keep track of how many trials are sampled at each step for figure
+            num_trials = np.sum([x.shape[0] for x, _, _ in cross_pt_data])
+            trial_vec[trial_idx] = num_trials
+
             y_true_all, y_pred_all = [], []
             cv = StratifiedKFold(n_splits=n_folds, shuffle=True)
 
             for j, (train_idx, test_idx) in enumerate(cv.split(D_tar, lab_tar)):
-                print(f'Fold {j+1}')
+                print(f'Iteration {i+1}, Fold {j+1}')
                 D_tar_train, D_tar_test = D_tar[train_idx], D_tar[test_idx]
                 lab_tar_train, lab_tar_test = lab_tar[train_idx], lab_tar[test_idx]
                 lab_tar_full_train, lab_tar_full_test = (lab_tar_full[train_idx],
                                                         lab_tar_full[test_idx])
+                # print(lab_tar_train, np.unique(lab_tar_full_train))
+                # for x, y, y_a in cross_pt_data:
+                #     print(y_a, np.unique(y_a))
                 
                 if joint_dim_red:
                     model = crossPtDecoder_jointDimRed(cross_pt_data, clf,
-                                                       JointPCA)
+                                                       JointPCA,
+                                                       tar_in_train=tar_in_train)
                 elif cca_align:
                     model = crossPtDecoder_sepAlign(cross_pt_data, clf,
-                                                    AlignCCA, dim_red=dim_red)
+                                                    AlignCCA, dim_red=dim_red,
+                                                    tar_in_train=tar_in_train)
                 elif mcca_align:
-                    model = crossPtDecoder_mcca(cross_pt_data, clf, AlignMCCA)
+                    model = crossPtDecoder_mcca(cross_pt_data, clf, AlignMCCA,
+                                                tar_in_train=tar_in_train)
                 else:
                     model = crossPtDecoder_sepDimRed(cross_pt_data, clf,
-                                                     dim_red=dim_red)
+                                                     dim_red=dim_red,
+                                                     tar_in_train=tar_in_train)
                 # nested cross-validation
                 if do_cv:
                     # search = GridSearchCV(model, param_grid, cv=cv,
@@ -347,7 +352,7 @@ def pooled_sampled_decoding():
         
             bal_acc = balanced_accuracy_score(y_true_all, y_pred_all)
             print(bal_acc)
-            pool_samp_mat[k-1, i] = bal_acc
+            pool_samp_mat[trial_idx, i] = bal_acc
 
             # save after every iteration in case of unexpected interrupt
             out_data['acc_mat'] = pool_samp_mat
