@@ -91,7 +91,7 @@ class Seq2SeqRNN(BaseLightningModel):
                  n_layers, kernel_size, stride=1, padding=0, cnn_dropout=0.3,
                  rnn_dropout=0.3, learning_rate=1e-3, l2_reg=1e-5,
                  criterion=nn.CrossEntropyLoss(), activation=True,
-                 seq_length=3):
+                 seq_length=3, warmup=20, max_epochs=500):
         super(Seq2SeqRNN, self).__init__(learning_rate=learning_rate,
                                          l2_reg=l2_reg, criterion=criterion)
         self.num_classes = num_classes
@@ -103,6 +103,8 @@ class Seq2SeqRNN(BaseLightningModel):
                                   dropout=rnn_dropout)
         self.decoder = DecoderRNN(hidden_size, num_classes, n_layers,
                                   dropout=rnn_dropout)
+        self.warmup = warmup
+        self.max_epochs = max_epochs
 
     def forward(self, x, y=None, teacher_forcing_ratio=0.5):
         # x is of shape (batch_size, n_timepoints, n_features) coming in
@@ -177,6 +179,19 @@ class Seq2SeqRNN(BaseLightningModel):
         res = {'test_loss': loss, 'test_acc': acc}
         self.log_dict(res, prog_bar=True)
         return loss
+    
+    def configure_optimizers(self):
+        optim = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_reg)
+        # optim = torch.optim.RAdam(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_reg, decoupled_weight_decay=True)
+        self.lr_sch = CosineWarmupScheduler(optim, self.warmup, self.max_epochs)
+        # lr_sch_conf = {'scheduler': self.lr_sch, 'interval': 'epoch'}
+        # optim_dict = {'optimizer': optim, 'lr_scheduler': lr_sch_conf}
+        # return optim_dict
+        return optim
+    
+    def optimizer_step(self, *args, **kwargs):
+        super().optimizer_step(*args, **kwargs)
+        self.lr_sch.step()
     
 
 class TCN_classifier(BaseLightningModel):
