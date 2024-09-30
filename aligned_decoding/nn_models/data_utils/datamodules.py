@@ -193,10 +193,11 @@ class AlignedMicroDataModule(L.LightningDataModule):
 
     def setup(self, stage=None):
         cv = self.select_cv(self.folds)
-        for k, (train_idx, test_idx) in enumerate(cv.split(self.data, self.labels)):
+        for k, (train_idx, test_idx) in enumerate(cv.split(self.data, self.labels.squeeze(1))):
             train_data, test_data = self.data[train_idx], self.data[test_idx]
             train_labels, test_labels = (self.labels[train_idx],
                                          self.labels[test_idx])
+            test_labels = test_labels.squeeze(1)
             align_labels = self.align_labels[train_idx]
 
             if self.val_size > 0:
@@ -209,6 +210,7 @@ class AlignedMicroDataModule(L.LightningDataModule):
                                       align_labels,
                                      test_size=self.val_size,
                                      stratify=split_labels))
+                val_labels = val_labels.squeeze(1)
             else:
                 val_data, val_labels = None, None
 
@@ -412,4 +414,4 @@ def process_aligner(X, y, y_align, pool_data, algner, n_components=0.95):
     except ValueError:
         y_pool = np.vstack([y] + [y for _, y, _ in pool_data])
 
-    return torch.Tensor(X_pool), torch.Tensor(y_pool).long(), tar_dr
+    return torch.Tensor(X_pool), torch.Tensor(y_pool).long().squeeze(1), tar_dr
