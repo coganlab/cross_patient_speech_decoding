@@ -110,9 +110,9 @@ class TemporalConvRNN(BaseLightningModel):
 
 class Seq2SeqRNN(BaseLightningModel):
     def __init__(self, in_channels, n_filters, hidden_size, num_classes,
-                 n_layers, kernel_size, stride=1, padding=0, cnn_dropout=0.3,
-                 rnn_dropout=0.3, learning_rate=1e-3, l2_reg=1e-5,
-                 criterion=nn.CrossEntropyLoss(), activation=True,
+                 n_enc_layers, n_dec_layers, kernel_size, stride=1, padding=0,
+                 cnn_dropout=0.3, rnn_dropout=0.3, learning_rate=1e-3,
+                 l2_reg=1e-5, criterion=nn.CrossEntropyLoss(), activation=True,
                  seq_length=3, decay_iters=20):
         super(Seq2SeqRNN, self).__init__(learning_rate=learning_rate,
                                          l2_reg=l2_reg, criterion=criterion)
@@ -121,9 +121,9 @@ class Seq2SeqRNN(BaseLightningModel):
         self.temporal_conv = TemporalConv(in_channels, n_filters, kernel_size,
                                           stride, padding, cnn_dropout,
                                           activation=activation)
-        self.encoder = EncoderRNN(n_filters, hidden_size, n_layers,
+        self.encoder = EncoderRNN(n_filters, hidden_size, n_enc_layers,
                                   dropout=rnn_dropout)
-        self.decoder = DecoderRNN(hidden_size, num_classes, n_layers,
+        self.decoder = DecoderRNN(hidden_size, num_classes, n_dec_layers,
                                   dropout=rnn_dropout)
         self.decay_iters = decay_iters
 
