@@ -53,10 +53,12 @@ class TemporalConvRNN(BaseLightningModel):
     def __init__(self, in_channels, n_filters, num_classes, hidden_size, n_layers,
                  kernel_size, dim_fc=None, stride=1, padding=0, cnn_dropout=0.3,
                  rnn_dropout=0.3, learning_rate=1e-3, l2_reg=1e-5,
-                 criterion=nn.CrossEntropyLoss(), activation=True):
+                 criterion=nn.CrossEntropyLoss(), activation=True,
+                 decay_iters=20):
         super(TemporalConvRNN, self).__init__(learning_rate=learning_rate,
                                               l2_reg=l2_reg, criterion=criterion)
         self.num_classes = num_classes
+        self.decay_iters = decay_iters
         self.temporal_conv = TemporalConv(in_channels, n_filters, kernel_size,
                                             stride, padding, cnn_dropout,
                                             activation=activation)
@@ -85,13 +87,33 @@ class TemporalConvRNN(BaseLightningModel):
             x = self.fc(x)
         return x
     
+    def configure_optimizers(self):
+        optim = torch.optim.AdamW(self.parameters(), lr=self.learning_rate,
+                                  weight_decay=self.l2_reg)
+        # # linear increase to learning rate for first decay_iters iterations
+        # lr_sch = torch.optim.lr_scheduler.LinearLR(optim, total_iters=self.decay_iters)
+
+        # linear decay of learning rate
+        lr_sch = torch.optim.lr_scheduler.LinearLR(optim,
+                                                   start_factor=1.0,
+                                                   end_factor=0.01,
+                                                   total_iters=self.decay_iters)
+
+        # # exponential decay of learning rate
+        # lr_sch = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=0.95)
+        optim_config = {'optimizer': optim,
+                        'lr_scheduler': {'scheduler': lr_sch,
+                                         'interval': 'epoch',
+                                         'frequency': 1}}
+        return optim_config
+    
 
 class Seq2SeqRNN(BaseLightningModel):
     def __init__(self, in_channels, n_filters, hidden_size, num_classes,
                  n_layers, kernel_size, stride=1, padding=0, cnn_dropout=0.3,
                  rnn_dropout=0.3, learning_rate=1e-3, l2_reg=1e-5,
                  criterion=nn.CrossEntropyLoss(), activation=True,
-                 seq_length=3, warmup=20, max_epochs=500):
+                 seq_length=3, decay_iters=20):
         super(Seq2SeqRNN, self).__init__(learning_rate=learning_rate,
                                          l2_reg=l2_reg, criterion=criterion)
         self.num_classes = num_classes
@@ -103,8 +125,7 @@ class Seq2SeqRNN(BaseLightningModel):
                                   dropout=rnn_dropout)
         self.decoder = DecoderRNN(hidden_size, num_classes, n_layers,
                                   dropout=rnn_dropout)
-        self.warmup = warmup
-        self.max_epochs = max_epochs
+        self.decay_iters = decay_iters
 
     def forward(self, x, y=None, teacher_forcing_ratio=0.5):
         # x is of shape (batch_size, n_timepoints, n_features) coming in
@@ -181,17 +202,24 @@ class Seq2SeqRNN(BaseLightningModel):
         return loss
     
     def configure_optimizers(self):
-        optim = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_reg)
-        # optim = torch.optim.RAdam(self.parameters(), lr=self.learning_rate, weight_decay=self.l2_reg, decoupled_weight_decay=True)
-        self.lr_sch = CosineWarmupScheduler(optim, self.warmup, self.max_epochs)
-        # lr_sch_conf = {'scheduler': self.lr_sch, 'interval': 'epoch'}
-        # optim_dict = {'optimizer': optim, 'lr_scheduler': lr_sch_conf}
-        # return optim_dict
-        return optim
-    
-    def optimizer_step(self, *args, **kwargs):
-        super().optimizer_step(*args, **kwargs)
-        self.lr_sch.step()
+        optim = torch.optim.AdamW(self.parameters(), lr=self.learning_rate,
+                                  weight_decay=self.l2_reg)
+        # # linear increase to learning rate for first decay_iters iterations
+        # lr_sch = torch.optim.lr_scheduler.LinearLR(optim, total_iters=self.decay_iters)
+
+        # linear decay of learning rate
+        lr_sch = torch.optim.lr_scheduler.LinearLR(optim,
+                                                   start_factor=1.0,
+                                                   end_factor=0.01,
+                                                   total_iters=self.decay_iters)
+
+        # # exponential decay of learning rate
+        # lr_sch = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=0.95)
+        optim_config = {'optimizer': optim,
+                        'lr_scheduler': {'scheduler': lr_sch,
+                                         'interval': 'epoch',
+                                         'frequency': 1}}
+        return optim_config
     
 
 class TCN_classifier(BaseLightningModel):
