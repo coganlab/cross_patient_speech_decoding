@@ -200,21 +200,25 @@ class AlignedMicroDataModule(L.LightningDataModule):
             align_labels = self.align_labels[train_idx]
 
             if self.val_size > 0:
+                if len(train_labels.shape) > 1:
+                    split_labels = train_labels[:,0]
+                else:
+                    split_labels = train_labels
                 train_data, val_data, train_labels, val_labels, align_labels, _ = \
                     (train_test_split(train_data, train_labels,
                                       align_labels,
                                      test_size=self.val_size,
-                                     stratify=train_labels))
+                                     stratify=split_labels))
             else:
                 val_data, val_labels = None, None
 
             aug_data = torch.cat((torch.Tensor([]), train_data))
-            aug_labels = torch.cat((torch.Tensor([]).long(), train_labels))
-            aug_align_labels = torch.cat((torch.Tensor([[], [], []]).long().T, align_labels))
+            aug_labels = torch.cat((torch.empty((0, train_labels.shape[-1])).long(), train_labels))
+            aug_align_labels = torch.cat((torch.empty((0, align_labels.shape[-1])).long(), align_labels))
             aug_pool_data = [[
                 torch.cat((torch.Tensor([]),x)),
-                torch.cat((torch.Tensor([]).long(),y)),
-                torch.cat((torch.Tensor([[],[],[]]).long().T, y_a))
+                torch.cat((torch.empty((0, y.shape[-1])).long(),y)),
+                torch.cat((torch.empty((0, y_a.shape[-1])).long(), y_a))
                 ] for (x, y, y_a) in self.pool_data]
             for aug in self.augmentations:
                 aug_data = torch.cat((aug_data, aug(train_data)))
@@ -350,7 +354,11 @@ class AlignedMicroDataModule(L.LightningDataModule):
         self.current_fold = fold
 
     def select_cv(self, folds):
-        class_counts = torch.bincount(self.labels)
+        if len(self.labels.shape) > 1:
+            cv_labels = self.labels[:,0]
+        else:
+            cv_labels = self.labels
+        class_counts = torch.bincount(cv_labels)
         if (class_counts < folds).any():
             cv = KFold(n_splits=folds, shuffle=True)
         else:
@@ -399,6 +407,9 @@ def process_aligner(X, y, y_align, pool_data, algner, n_components=0.95):
 
     # concatenate cross-patient data
     X_pool = np.vstack([X_tar_dr] + X_algn_dr)
-    y_pool = np.hstack([y] + [y for _, y, _ in pool_data])
+    try:
+        y_pool = np.hstack([y] + [y for _, y, _ in pool_data])
+    except ValueError:
+        y_pool = np.vstack([y] + [y for _, y, _ in pool_data])
 
     return torch.Tensor(X_pool), torch.Tensor(y_pool).long(), tar_dr
