@@ -111,7 +111,7 @@ class TemporalConvRNN(BaseLightningModel):
 class Seq2SeqRNN(BaseLightningModel):
     def __init__(self, in_channels, n_filters, hidden_size, num_classes,
                  n_enc_layers, n_dec_layers, kernel_size, stride=1, padding=0,
-                 cnn_dropout=0.3, rnn_dropout=0.3, learning_rate=1e-3,
+                 cnn_dropout=0.3, rnn_dropout=0.3, model_type='gru', learning_rate=1e-3,
                  l2_reg=1e-5, criterion=nn.CrossEntropyLoss(), activation=True,
                  seq_length=3, decay_iters=20):
         super(Seq2SeqRNN, self).__init__(learning_rate=learning_rate,
@@ -122,9 +122,9 @@ class Seq2SeqRNN(BaseLightningModel):
                                           stride, padding, cnn_dropout,
                                           activation=activation)
         self.encoder = EncoderRNN(n_filters, hidden_size, n_enc_layers,
-                                  dropout=rnn_dropout)
+                                  dropout=rnn_dropout, model_type=model_type)
         self.decoder = DecoderRNN(hidden_size, num_classes, n_dec_layers,
-                                  dropout=rnn_dropout)
+                                  dropout=rnn_dropout, model_type=model_type)
         self.decay_iters = decay_iters
 
     def forward(self, x, y=None, teacher_forcing_ratio=0.5):
@@ -362,37 +362,51 @@ class EncoderRNN(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, dropout=0.3,
                  model_type='gru'):
         super(EncoderRNN, self).__init__()
-        if model_type == 'gru':
+        self.model_type = model_type
+        if self.model_type == 'gru':
             self.rnn = nn.GRU(input_size, hidden_size, num_layers,
                             batch_first=True, dropout=dropout,
                             bidirectional=True)
-        elif model_type == 'lstm':
+        elif self.model_type == 'lstm':
             self.rnn = nn.LSTM(input_size, hidden_size, num_layers,
                             batch_first=True, dropout=dropout,
                             bidirectional=True)
+        else:
+            raise ValueError('model_type must be one of "gru" or "lstm"')
 
     def forward(self, x):
         # x is of shape (batch_size, n_timepoints, n_features) coming in
 
         # hidden = (num_layers * num_directions, batch_size, hidden_size)
-        output, hidden = self.rnn(x)
+        if self.model_type == 'gru':
+            output, hidden = self.rnn(x)
 
-        # hidden = (num_layers, num_directions, batch_size, hidden_size)
-        hidden = hidden.view(self.rnn.num_layers, 2, -1, self.rnn.hidden_size)
+            # hidden = (num_layers, num_directions, batch_size, hidden_size)
+            hidden = hidden.view(self.rnn.num_layers, 2, -1, self.rnn.hidden_size)
 
-        # extract forward and backward hidden states from last layer
-        # (batch_size, hidden_size)
-        last_forward = hidden[-1, 0, :, :]
-        last_backward = hidden[-1, 1, :, :]
+            # extract forward and backward hidden states from last layer
+            # (batch_size, hidden_size)
+            last_forward = hidden[-1, 0, :, :]
+            last_backward = hidden[-1, 1, :, :]
 
-        # # concatenated forward and backward hidden states to
-        # # (batch_size, 2*hidden_size)
-        # last_hidden = torch.cat((last_forward, last_backward), dim=1)
-        # last_hidden = last_hidden.unsqueeze(0)  # (1, batch_size, 2*hidden_size)
-        
-        # sum forward and backward hidden states
-        last_hidden = last_forward + last_backward # (batch_size, hidden_size)
-        last_hidden = last_hidden.unsqueeze(0)  # (1, batch_size, hidden_size)
+            # sum forward and backward hidden states
+            last_hidden = last_forward + last_backward # (batch_size, hidden_size)
+            last_hidden = last_hidden.unsqueeze(0)  # (1, batch_size, hidden_size)
+
+        elif self.model_type == 'lstm': # modified for lstm state tuple
+            output, (h_n, c_n) = self.rnn(x)
+            
+            h_n = h_n.view(self.rnn.num_layers, 2, -1, self.rnn.hidden_size)
+            c_n = c_n.view(self.rnn.num_layers, 2, -1, self.rnn.hidden_size)
+
+            last_forward_h = h_n[-1, 0, :, :]
+            last_backward_h = h_n[-1, 1, :, :]
+            last_hidden_h = last_forward_h + last_backward_h
+            last_forward_c = c_n[-1, 0, :, :]
+            last_backward_c = c_n[-1, 1, :, :]
+            last_hidden_c = last_forward_c + last_backward_c
+
+            last_hidden = (last_hidden_h, last_hidden_c)
 
         return output, last_hidden
     
