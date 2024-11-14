@@ -5,9 +5,9 @@ from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.callbacks.model_checkpoint import ModelCheckpoint
 from pytorch_lightning.utilities.model_summary import summarize
 import torch
-from datamodules import SimpleMicroDataModule, AlignedMicroDataModule
+from repos.cross_patient_speech_decoding.aligned_decoding.nn_models.data_utils.datamodules import SimpleMicroDataModule, AlignedMicroDataModule
 from models import CNNTransformer, Transformer
-import augmentations as augs
+import repos.cross_patient_speech_decoding.aligned_decoding.nn_models.data_utils.augmentations as augs
 
 import os
 import sys

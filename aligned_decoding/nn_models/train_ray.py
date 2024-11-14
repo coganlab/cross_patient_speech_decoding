@@ -7,11 +7,11 @@ from pytorch_lightning.utilities.model_summary import summarize
 import ray.train.lightning
 from ray.train.torch import TorchTrainer
 
-from datamodules import SimpleMicroDataModule, AlignedMicroDataModule
+from data_utils.datamodules import SimpleMicroDataModule, AlignedMicroDataModule
 from models import CNNTransformer, Transformer
 sys.path.append('..')
-import alignment_utils as utils
-import AlignCCA
+import data_utils.alignment_utils as utils
+import data_utils.AlignCCA as AlignCCA
 
 ray.init(namespace='coll', runtime_env={"working_dir": "./"})
 

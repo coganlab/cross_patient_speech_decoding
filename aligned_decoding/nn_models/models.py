@@ -53,10 +53,12 @@ class TemporalConvRNN(BaseLightningModel):
     def __init__(self, in_channels, n_filters, num_classes, hidden_size, n_layers,
                  kernel_size, dim_fc=None, stride=1, padding=0, cnn_dropout=0.3,
                  rnn_dropout=0.3, learning_rate=1e-3, l2_reg=1e-5,
-                 criterion=nn.CrossEntropyLoss(), activation=True):
+                 criterion=nn.CrossEntropyLoss(), activation=True,
+                 decay_iters=20):
         super(TemporalConvRNN, self).__init__(learning_rate=learning_rate,
                                               l2_reg=l2_reg, criterion=criterion)
         self.num_classes = num_classes
+        self.decay_iters = decay_iters
         self.temporal_conv = TemporalConv(in_channels, n_filters, kernel_size,
                                             stride, padding, cnn_dropout,
                                             activation=activation)
@@ -84,6 +86,140 @@ class TemporalConvRNN(BaseLightningModel):
         if self.fc is not None:
             x = self.fc(x)
         return x
+    
+    def configure_optimizers(self):
+        optim = torch.optim.AdamW(self.parameters(), lr=self.learning_rate,
+                                  weight_decay=self.l2_reg)
+        # # linear increase to learning rate for first decay_iters iterations
+        # lr_sch = torch.optim.lr_scheduler.LinearLR(optim, total_iters=self.decay_iters)
+
+        # linear decay of learning rate
+        lr_sch = torch.optim.lr_scheduler.LinearLR(optim,
+                                                   start_factor=1.0,
+                                                   end_factor=0.01,
+                                                   total_iters=self.decay_iters)
+
+        # # exponential decay of learning rate
+        # lr_sch = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=0.95)
+        optim_config = {'optimizer': optim,
+                        'lr_scheduler': {'scheduler': lr_sch,
+                                         'interval': 'epoch',
+                                         'frequency': 1}}
+        return optim_config
+    
+
+class Seq2SeqRNN(BaseLightningModel):
+    def __init__(self, in_channels, n_filters, hidden_size, num_classes,
+                 n_enc_layers, n_dec_layers, kernel_size, stride=1, padding=0,
+                 cnn_dropout=0.3, rnn_dropout=0.3, model_type='gru', learning_rate=1e-3,
+                 l2_reg=1e-5, criterion=nn.CrossEntropyLoss(), activation=True,
+                 seq_length=3, decay_iters=20):
+        super(Seq2SeqRNN, self).__init__(learning_rate=learning_rate,
+                                         l2_reg=l2_reg, criterion=criterion)
+        self.num_classes = num_classes
+        self.seq_length = seq_length
+        self.temporal_conv = TemporalConv(in_channels, n_filters, kernel_size,
+                                          stride, padding, cnn_dropout,
+                                          activation=activation)
+        self.encoder = EncoderRNN(n_filters, hidden_size, n_enc_layers,
+                                  dropout=rnn_dropout, model_type=model_type)
+        self.decoder = DecoderRNN(hidden_size, num_classes, n_dec_layers,
+                                  dropout=rnn_dropout, model_type=model_type)
+        self.decay_iters = decay_iters
+
+    def forward(self, x, y=None, teacher_forcing_ratio=0.5):
+        # x is of shape (batch_size, n_timepoints, n_features) coming in
+        # y is of shape (batch_size, seq_length) coming in if not None
+
+        x = x.permute(0, 2, 1) # (batch_size, n_features, n_timepoints)
+        x = self.temporal_conv(x)  # pass data through temporal conv layer
+        x = x.permute(0, 2, 1)  # (batch_size, n_timepoints, n_filteers)
+
+        # encode temporally convolved features with RNN
+        _, enc_hidden = self.encoder(x)
+
+        # first hidden state of decoder is hidden state of encoder
+        # only using last hidden state from encoder, so need to repeat for all
+        # decoder layers
+        dec_hidden = enc_hidden.repeat(self.decoder.rnn.num_layers, 1, 1)
+
+        # create a tensor of start tokens for each batch - decoder will predict
+        # 0 -> (num_classes-1), so we make the start token num_classes
+        batch_size = x.size(0)
+        start_tokens = torch.full((batch_size,), self.num_classes,
+                                  dtype=torch.long, device=x.device)
+        dec_input = start_tokens
+
+        # generate output sequence predictions
+        outputs = []
+        for i in range(self.seq_length):
+            dec_output, dec_hidden = self.decoder(dec_input, dec_hidden)
+            outputs.append(dec_output)
+
+            if y is not None and torch.rand(1).item() < teacher_forcing_ratio:
+                dec_input = y[:, i]  # teacher forcing
+            else:
+                # use predictions as input for next sequence element
+                dec_input = dec_output.argmax(1)
+
+        # (batch_size, seq_length, num_classes)
+        outputs = torch.stack(outputs, dim=1)  
+        return outputs
+    
+    def training_step(self, batch, batch_idx):
+        x, y = batch
+        # use teacher forcing during training
+        y_hat = self(x, y, teacher_forcing_ratio=0.5)  # (batch_size, seq_length, num_classes)
+        y_hat = y_hat.view(-1, self.num_classes)  # (batch_size*seq_length, num_classes)
+        y = y.view(-1)  # (batch_size*seq_length)
+        loss = self.criterion(y_hat, y)
+        acc = cmat_acc(y_hat, y, self.num_classes)
+        res = {'train_loss': loss, 'train_acc': acc}
+        self.log_dict(res, prog_bar=True)
+        return loss
+    
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        # no teacher forcing during validation/testing/prediction
+        y_hat = self(x, y, teacher_forcing_ratio=0)
+        y_hat = y_hat.view(-1, self.num_classes)
+        y = y.view(-1)
+        loss = self.criterion(y_hat, y)
+        acc = cmat_acc(y_hat, y, self.num_classes)
+        res = {'val_loss': loss, 'val_acc': acc}
+        self.log_dict(res, prog_bar=True)
+        return loss
+    
+    def test_step(self, batch, batch_idx):
+        x, y = batch
+        y_hat = self(x, y, teacher_forcing_ratio=0)
+        y_hat = y_hat.view(-1, self.num_classes)
+        y = y.view(-1)
+        loss = self.criterion(y_hat, y)
+        acc = cmat_acc(y_hat, y, self.num_classes)
+        res = {'test_loss': loss, 'test_acc': acc}
+        self.log_dict(res, prog_bar=True)
+        return loss
+    
+    def configure_optimizers(self):
+        optim = torch.optim.AdamW(self.parameters(), lr=self.learning_rate,
+                                  weight_decay=self.l2_reg)
+        # # linear increase to learning rate for first decay_iters iterations
+        # lr_sch = torch.optim.lr_scheduler.LinearLR(optim, total_iters=self.decay_iters)
+
+        # linear decay of learning rate
+        lr_sch = torch.optim.lr_scheduler.LinearLR(optim,
+                                                   start_factor=1.0,
+                                                   end_factor=0.01,
+                                                   total_iters=self.decay_iters)
+
+        # # exponential decay of learning rate
+        # lr_sch = torch.optim.lr_scheduler.ExponentialLR(optim, gamma=0.95)
+        optim_config = {'optimizer': optim,
+                        'lr_scheduler': {'scheduler': lr_sch,
+                                         'interval': 'epoch',
+                                         'frequency': 1}}
+        return optim_config
     
 
 class TCN_classifier(BaseLightningModel):
@@ -221,6 +357,86 @@ class TemporalConv(nn.Module):
         x = self.dropout(x)
         return x
     
+
+class EncoderRNN(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, dropout=0.3,
+                 model_type='gru'):
+        super(EncoderRNN, self).__init__()
+        self.model_type = model_type
+        if self.model_type == 'gru':
+            self.rnn = nn.GRU(input_size, hidden_size, num_layers,
+                            batch_first=True, dropout=dropout,
+                            bidirectional=True)
+        elif self.model_type == 'lstm':
+            self.rnn = nn.LSTM(input_size, hidden_size, num_layers,
+                            batch_first=True, dropout=dropout,
+                            bidirectional=True)
+        else:
+            raise ValueError('model_type must be one of "gru" or "lstm"')
+
+    def forward(self, x):
+        # x is of shape (batch_size, n_timepoints, n_features) coming in
+
+        # hidden = (num_layers * num_directions, batch_size, hidden_size)
+        if self.model_type == 'gru':
+            output, hidden = self.rnn(x)
+
+            # hidden = (num_layers, num_directions, batch_size, hidden_size)
+            hidden = hidden.view(self.rnn.num_layers, 2, -1, self.rnn.hidden_size)
+
+            # extract forward and backward hidden states from last layer
+            # (batch_size, hidden_size)
+            last_forward = hidden[-1, 0, :, :]
+            last_backward = hidden[-1, 1, :, :]
+
+            # sum forward and backward hidden states
+            last_hidden = last_forward + last_backward # (batch_size, hidden_size)
+            last_hidden = last_hidden.unsqueeze(0)  # (1, batch_size, hidden_size)
+
+        elif self.model_type == 'lstm': # modified for lstm state tuple
+            output, (h_n, c_n) = self.rnn(x)
+            
+            h_n = h_n.view(self.rnn.num_layers, 2, -1, self.rnn.hidden_size)
+            c_n = c_n.view(self.rnn.num_layers, 2, -1, self.rnn.hidden_size)
+
+            last_forward_h = h_n[-1, 0, :, :]
+            last_backward_h = h_n[-1, 1, :, :]
+            last_hidden_h = last_forward_h + last_backward_h
+            last_forward_c = c_n[-1, 0, :, :]
+            last_backward_c = c_n[-1, 1, :, :]
+            last_hidden_c = last_forward_c + last_backward_c
+
+            last_hidden = (last_hidden_h, last_hidden_c)
+
+        return output, last_hidden
+    
+
+class DecoderRNN(nn.Module):
+    def __init__(self, hidden_size, output_size, num_layers, dropout=0.3,
+                 model_type='gru'):
+        super(DecoderRNN, self).__init__()
+        self.embedding = nn.Embedding(output_size+1, hidden_size)
+
+        # # since encoder is bidirectional and we are concatenating forward and
+        # # backward passes, the size of the decoder hidden state is doubled
+        # # relative to the encoder hidden size
+        # bidir_hidden_size = hidden_size * 2
+
+        if model_type == 'gru':
+            self.rnn = nn.GRU(hidden_size, hidden_size, num_layers,
+                            batch_first=True, dropout=dropout)
+        elif model_type == 'lstm':
+            self.rnn = nn.LSTM(hidden_size, hidden_size, num_layers,
+                            batch_first=True, dropout=dropout)
+        self.fc_out = nn.Linear(hidden_size, output_size)
+
+    def forward(self, x, hidden):
+        # x is of shape (batch_size,) coming in
+        embed = self.embedding(x).unsqueeze(1)  # (batch_size, 1, hidden_size)
+        output, hidden = self.rnn(embed, hidden)  # (batch_size, 1, hidden_size)
+        output = self.fc_out(output.squeeze(1))  # (batch_size, output_size)
+        return output, hidden
+
 
 class SimpleGRU(nn.Module):
     def __init__(self, input_size, hidden_size, out_size, num_layers,
