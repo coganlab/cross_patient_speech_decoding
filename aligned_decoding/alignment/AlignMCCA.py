@@ -70,7 +70,9 @@ def get_MCCA_transforms(features, labels, n_components=10, regs=0.5,
     
     ranks = None
     if pca_var > 0 and pca_var < 1:
-        ranks = [min(n_components, n_components_var(x, pca_var)) for x in features]
+        ranks = [min(n_components,
+                     n_components_var(x.reshape(-1, x.shape[-1]), pca_var))
+                     for x in features]
 
     mcca = MCCA(n_components=n_components, regs=regs, signal_ranks=ranks)
     mcca.fit(cnd_avg_data)
@@ -78,7 +80,7 @@ def get_MCCA_transforms(features, labels, n_components=10, regs=0.5,
 
 def n_components_var(X, var):
     # get squared singular values from svd of X
-    _, s, _ = np.linalg.svd(X)
+    _, s, _ = np.linalg.svd(X, full_matrices=False)
     s = s**2
     # normalize singular values to sum to 1
     s /= np.sum(s)
