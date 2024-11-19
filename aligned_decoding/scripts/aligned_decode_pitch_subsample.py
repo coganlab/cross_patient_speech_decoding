@@ -2,6 +2,7 @@
 import sys
 import os
 import argparse
+from copy import deepcopy
 import numpy as np
 import scipy.io as sio
 from sklearn.model_selection import (StratifiedKFold, KFold, GridSearchCV,
@@ -38,7 +39,7 @@ def init_parser():
     parser.add_argument('-a', '--cca_align', type=str, default='False',
                         required=False,
                         help='Align pooled data to target data with CCA')
-    parser.add_argument('-p', '--pitch', type=int, required=True,
+    parser.add_argument('-p', '--pitch', type=float, required='True',
                         help='Pitch of subsampled electrodes')
     parser.add_argument('-pp', '--pooled_patients', type=str, default='all',
                         required=False, help='Cross patient indices')
@@ -117,7 +118,7 @@ def aligned_decoding():
         OUT_PATH = os.path.expanduser('~') + '/workspace/'
     else:
         DATA_PATH = '../data/'
-        OUT_PATH = '../acc_data/'
+        OUT_PATH = '../data/outputs/'
 
     # patient and target params
     pt = inputs['patient']
@@ -135,8 +136,8 @@ def aligned_decoding():
         pooled_pts = inputs['pooled_patients'].split(',')
 
     # constant params
-    n_iter = 50
-    n_folds = 20
+    n_iter = 3
+    n_folds = 5
     # n_iter = 2
     # n_folds = 2
 
@@ -194,7 +195,7 @@ def aligned_decoding():
         if cluster:
             out_prefix = OUT_PATH + f'outputs/alignment_accs/{pt}/'
         else:
-            out_prefix = OUT_PATH + f'ncv_accs/{pt}/'
+            out_prefix = OUT_PATH + f'pitch_accs/{pt}/'
         filename = out_prefix + (f"{pt}_{'p' if lab_type == 'phon'else 'a'}"
                                  f"{'All' if p_ind == -1 else p_ind}_"
                                  f"{filename_suffix}.pkl")
@@ -205,7 +206,7 @@ def aligned_decoding():
     print('Pool train: %s' % pool_train)
     print('Target in train: %s' % tar_in_train)
     print('CCA align: %s' % cca_align)
-    print('Subsampled pitch: %d' % pitch)
+    print('Subsampled pitch: %.2f' % pitch)
     print('Alignment type: %s' % algn_type)
     print('Alignment grouping: %s' % algn_grouping)
     print('Label type: %s' % lab_type)
@@ -218,26 +219,20 @@ def aligned_decoding():
     print('==================================================================')
 
     # load data
-    # data_filename = DATA_PATH + 'pt_decoding_data.pkl'
-    # data_filename = DATA_PATH + 'pt_decoding_data_S22.pkl'
-    # data_filename = DATA_PATH + 'pt_decoding_data_S39.pkl'
-    # data_filename = DATA_PATH + 'pt_decoding_data_S58.pkl'
     data_filename = DATA_PATH + 'pt_decoding_data_S62.pkl'
     pt_data = utils.load_pkl(data_filename)
     pt_names = list(pt_data.keys())
+    pre_pts = pt_data[pt]['pre_pts']
     tar_data, pre_data = utils.decoding_data_from_dict(pt_data, pt, p_ind,
                                                        lab_type=lab_type,
                                                        algn_type=algn_type)
     D_tar, lab_tar, lab_tar_full = tar_data
-    # D1, lab1, lab1_full = pre_data[0]
-    # D2, lab2, lab2_full = pre_data[1]
-    # D3, lab3, lab3_full = pre_data[2]
 
     if len(pooled_pts) > 0:
-        pt_names = pooled_pts
-        pre_pts = pt_data[pt]['pre_pts']
+        cross_pt_names = pooled_pts
         cross_pt_data = [pre_data[pre_pts.index(p)] for p in pooled_pts]
     else:
+        cross_pt_names = pre_pts
         cross_pt_data = pre_data
     # print(f'Length of cross pt data: {len(cross_pt_data)}')
     # print(f'Pooled patients: {[pre_pts[pre_pts.index(p)] for p in pooled_pts]}')
@@ -288,15 +283,25 @@ def aligned_decoding():
     for j in range(n_iter):
 
         # susbsample channels in all_patients
-        for curr_pt in pt_names:
+        cross_pt_subsamp = []
+        for curr_pt in [pt] + cross_pt_names:
             subsamp_idx = subsample_sig_channels(curr_pt, pitch)
+            # print(curr_pt)
+            # print(len(subsamp_idx))
             # modify target patient data
             if curr_pt == pt:
-                D_tar = D_tar[:,:,subsamp_idx]
+                D_tar_subsamp = D_tar[:,:,subsamp_idx]
             else: # modify cross patient data - careful with indexing
-                curr_data = cross_pt_data[pt_names.index(curr_pt)]
-                curr_data[0] = curr_data[0][:,:,subsamp_idx]
-                cross_pt_data[pt_names.index(curr_pt)] = curr_data      
+                # print(cross_pt_names.index(curr_pt))
+                # print(cross_pt_data[cross_pt_names.index(curr_pt)][0].shape)
+                curr_idx = cross_pt_names.index(curr_pt)
+                curr_D = cross_pt_data[curr_idx][0].copy()
+                new_tup = (
+                    curr_D[:,:,subsamp_idx],
+                    cross_pt_data[curr_idx][1],
+                    cross_pt_data[curr_idx][2]
+                )
+                cross_pt_subsamp.append(new_tup)
 
         y_true_all, y_pred_all = [], []
         wrong_trs_fold = []
@@ -304,14 +309,15 @@ def aligned_decoding():
         try:  # default to stratified split
             cv = StratifiedKFold(n_splits=n_folds, shuffle=True)
              # list forces computation to check if stratified is viable
-            splits = list(cv.split(D_tar, lab_tar))
+            splits = list(cv.split(D_tar_subsamp, lab_tar))
         except ValueError:  # if not enough samples in a class
             cv = KFold(n_splits=n_folds, shuffle=True)
-            splits = list(cv.split(D_tar))
+            splits = list(cv.split(D_tar_subsamp))
 
         for i, (train_idx, test_idx) in enumerate(splits):
             print(f'Iteration {j+1}, Fold {i+1}')
-            D_tar_train, D_tar_test = D_tar[train_idx], D_tar[test_idx]
+            D_tar_train, D_tar_test = (D_tar_subsamp[train_idx],
+                                       D_tar_subsamp[test_idx])
             lab_tar_train, lab_tar_test = lab_tar[train_idx], lab_tar[test_idx]
             lab_tar_full_train, lab_tar_full_test = (lab_tar_full[train_idx],
                                                      lab_tar_full[test_idx])
@@ -320,11 +326,11 @@ def aligned_decoding():
             if pool_train:
                 # define alignment method
                 if cca_align:
-                    model = crossPtDecoder_sepAlign(cross_pt_data, clf,
+                    model = crossPtDecoder_sepAlign(cross_pt_subsamp, clf,
                                                     AlignCCA, dim_red=dim_red,
                                                     tar_in_train=tar_in_train)
                 else:
-                    model = crossPtDecoder_sepDimRed(cross_pt_data, clf,
+                    model = crossPtDecoder_sepDimRed(cross_pt_subsamp, clf,
                                                      dim_red=dim_red,
                                                      tar_in_train=tar_in_train)
                 # nested cross-validation
