@@ -61,9 +61,9 @@ def str2bool(s):
     return s.lower() == 'true'
 
 
-def subsample_sig_channels(pt, pitch):
+def subsample_sig_channels(pt, pitch, data_path):
     # load in channel map
-    chanMap = sio.loadmat(f'../data/{pt}/{pt}_channelMap.mat')['chanMap']
+    chanMap = sio.loadmat(f'{data_path}/{pt}/{pt}_channelMap.mat')['chanMap']
     # trim nan edges if necessary
     if chanMap.shape[1] == 24:
         chanMap = chanMap[:,1:-1]
@@ -92,7 +92,7 @@ def subsample_sig_channels(pt, pitch):
 
     # load in significant channel data
     sigChan = np.squeeze(
-        sio.loadmat(f'../data/{pt}/{pt}_sigChannel.mat')['sigChannel'])
+        sio.loadmat(f'{data_path}/{pt}/{pt}_sigChannel.mat')['sigChannel'])
     
     # get indices of significant channels in the subsampled set
     _, sigIdx, _ = np.intersect1d(sigChan, elecPt, return_indices=True)
@@ -285,7 +285,7 @@ def aligned_decoding():
         # susbsample channels in all_patients
         cross_pt_subsamp = []
         for curr_pt in [pt] + cross_pt_names:
-            subsamp_idx = subsample_sig_channels(curr_pt, pitch)
+            subsamp_idx = subsample_sig_channels(curr_pt, pitch, DATA_PATH)
             # print(curr_pt)
             # print(len(subsamp_idx))
             # modify target patient data
