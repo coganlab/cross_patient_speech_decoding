@@ -15,10 +15,13 @@ def subsample_sig_channels(pt, pitch, data_path):
     if pt in ['S14', 'S22', 'S23', 'S26']:
         mmX = 11.3
         mmY = 22.5
+        maxElec = 128
     elif pt in ['S33', 'S39', 'S58', 'S62']:
         mmX = 37.8
         mmY = 20.6
+        maxElec = 256
     nElec = round(mmX * mmY / pitch**2)
+    nElec = min(nElec, maxElec)
 
     # parameters for poisson disk sampling
     gridX, gridY = chanMap.shape
