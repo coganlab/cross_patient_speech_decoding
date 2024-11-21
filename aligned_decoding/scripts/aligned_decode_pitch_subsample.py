@@ -99,7 +99,7 @@ def subsample_sig_channels(pt, pitch, data_path):
 
     # do sampling over if we don't sample at least 1 significant channel
     if len(sigIdx) == 0:
-        return subsample_sig_channels(pt, nElec)
+        return subsample_sig_channels(pt, nElec, data_path)
 
     return sigIdx
 
@@ -136,10 +136,10 @@ def aligned_decoding():
         pooled_pts = inputs['pooled_patients'].split(',')
 
     # constant params
-    n_iter = 3
-    n_folds = 5
-    # n_iter = 2
-    # n_folds = 2
+    # n_iter = 3
+    # n_folds = 5
+    n_iter = 50
+    n_folds = 20
 
     ###### CV GRID ######
     if do_cv:
@@ -192,6 +192,7 @@ def aligned_decoding():
         filename = inputs['filename']
     else:
         filename_suffix = inputs['suffix']
+        filename_suffix = filename_suffix.replace('.', '-')
         if cluster:
             out_prefix = OUT_PATH + f'outputs/alignment_accs/{pt}/'
         else:
