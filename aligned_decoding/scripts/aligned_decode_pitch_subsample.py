@@ -23,7 +23,7 @@ from decomposition.DimRedReshape import DimRedReshape
 from decoders.cross_pt_decoders import (crossPtDecoder_sepDimRed,
                                         crossPtDecoder_sepAlign)
 import alignment.alignment_utils as utils
-from processing_utils.poisson_disk_sampling import poisson_disk_sampling
+from processing_utils.poisson_disk_sampling import subsample_sig_channels
 
 
 def init_parser():
@@ -59,49 +59,6 @@ def init_parser():
 
 def str2bool(s):
     return s.lower() == 'true'
-
-
-def subsample_sig_channels(pt, pitch, data_path):
-    # load in channel map
-    chanMap = sio.loadmat(f'{data_path}/{pt}/{pt}_channelMap.mat')['chanMap']
-    # trim nan edges if necessary
-    if chanMap.shape[1] == 24:
-        chanMap = chanMap[:,1:-1]
-
-    # to preserve pitch when sampling across different grid sizes, calculate
-    # number of electrodes to sample based on the desired pitch
-    if pt in ['S14', 'S22', 'S23', 'S26']:
-        mmX = 11.3
-        mmY = 22.5
-    elif pt in ['S33', 'S39', 'S58', 'S62']:
-        mmX = 37.8
-        mmY = 20.6
-    nElec = round(mmX * mmY / pitch**2)
-
-    # parameters for poisson disk sampling
-    gridX, gridY = chanMap.shape
-    domain = (gridX, gridY)
-    spacing = np.floor(np.sqrt(gridX * gridY / nElec))
-
-    # do poisson disk sampling and -1 to get 0-indexed
-    elecIdx = poisson_disk_sampling(domain, spacing, nElec)
-    elecIdx = np.round(elecIdx).astype(int) - 1
-
-    # convert 2D coordinates to channel numbers
-    elecPt = chanMap[elecIdx[:, 0], elecIdx[:, 1]].astype(int)
-
-    # load in significant channel data
-    sigChan = np.squeeze(
-        sio.loadmat(f'{data_path}/{pt}/{pt}_sigChannel.mat')['sigChannel'])
-    
-    # get indices of significant channels in the subsampled set
-    _, sigIdx, _ = np.intersect1d(sigChan, elecPt, return_indices=True)
-
-    # do sampling over if we don't sample at least 1 significant channel
-    if len(sigIdx) == 0:
-        return subsample_sig_channels(pt, nElec, data_path)
-
-    return sigIdx
 
 
 def aligned_decoding():
