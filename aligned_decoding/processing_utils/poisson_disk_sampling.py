@@ -21,19 +21,32 @@ def subsample_sig_channels(pt, pitch, data_path):
         mmY = 20.6
         maxElec = 256
     nElec = round(mmX * mmY / pitch**2)
-    nElec = min(nElec, maxElec)
+    
+    if nElec >= maxElec:
+        # just sample all electrodes if we're sampling more than the max
+        elecPt = np.arange(1, maxElec+1)
+    else:
+        # parameters for poisson disk sampling
+        gridX, gridY = chanMap.shape
+        domain = (gridX, gridY)
+        spacing = np.floor(np.sqrt(gridX * gridY / nElec))
 
-    # parameters for poisson disk sampling
-    gridX, gridY = chanMap.shape
-    domain = (gridX, gridY)
-    spacing = np.floor(np.sqrt(gridX * gridY / nElec))
+        # do poisson disk sampling and -1 to get 0-indexed
+        elecIdx = poisson_disk_sampling(domain, spacing, nElec)
+        elecIdx = np.round(elecIdx).astype(int) - 1
 
-    # do poisson disk sampling and -1 to get 0-indexed
-    elecIdx = poisson_disk_sampling(domain, spacing, nElec)
-    elecIdx = np.round(elecIdx).astype(int) - 1
+        # convert 2D coordinates to channel numbers
+        elecPt = chanMap[elecIdx[:, 0], elecIdx[:, 1]].astype(int)
 
-    # convert 2D coordinates to channel numbers
-    elecPt = chanMap[elecIdx[:, 0], elecIdx[:, 1]].astype(int)
+        # check if we need to sample more electrodes
+        if elecPt.shape[0] < nElec and spacing == 1:
+            nRemaining = nElec - elecPt.shape[0]
+            # get unsampled electrodes
+            remainingElecs = np.setdiff1d(np.arange(1, gridX * gridY+1), elecPt)
+            # uniformly sample remaining electrodes
+            extraSampPt = np.random.choice(remainingElecs, nRemaining,
+                                            replace=False)
+            elecPt = np.concatenate((elecPt, extraSampPt))
 
     # load in significant channel data
     sigChan = np.squeeze(
@@ -168,14 +181,25 @@ if __name__ == '__main__':
     gridX = 8
     gridY = 16
 
-    for nElec in [30]:
+    for nElec in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 100]:
+    # for pitch in [10, 5, 3, 2, 1.5]:
+
+        # sig, all, extra = subsample_sig_channels('S14', pitch, '../data')
+        # grid = np.zeros((gridX, gridY))
+        # grid[all[:, 0], all[:, 1]] = 1
+        # if extra.shape[0] > 0:
+        #     grid[extra[:, 0], extra[:, 1]] = 2
+    
+        # plt.imshow(grid.T, cmap='gray', origin='lower')
+        # plt.show()
+    
         print('### Sampling for nElec =', nElec, '###')
         # nElec = 
         domain = (gridX, gridY)
         spacing = np.floor(np.sqrt(gridX * gridY / nElec))
         # print(spacing)
 
-        n_grids = 10
+        n_grids = 3
         saved_grids = np.zeros((n_grids, gridX, gridY))
         for i in range(n_grids):
             points = poisson_disk_sampling(domain, spacing, nElec)
@@ -193,4 +217,3 @@ if __name__ == '__main__':
         # check that the grids are different
         n_unique_grids = np.unique(saved_grids, axis=0).shape[0]
         print(n_unique_grids, n_unique_grids == n_grids)
-
