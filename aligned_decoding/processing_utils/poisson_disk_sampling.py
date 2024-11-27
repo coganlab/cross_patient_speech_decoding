@@ -3,9 +3,14 @@ import scipy.io as sio
 import matplotlib.pyplot as plt
 import time
 
-def subsample_sig_channels(pt, pitch, data_path):
+def pitch_subsample_sig_channels(pt, pitch, data_path):
     # load in channel map
     chanMap = sio.loadmat(f'{data_path}/{pt}/{pt}_channelMap.mat')['chanMap']
+
+    # load in significant channel data
+    sigChan = np.squeeze(
+        sio.loadmat(f'{data_path}/{pt}/{pt}_sigChannel.mat')['sigChannel'])
+
     # trim nan edges if necessary
     if chanMap.shape[1] == 24:
         chanMap = chanMap[:,1:-1]
@@ -48,16 +53,12 @@ def subsample_sig_channels(pt, pitch, data_path):
                                             replace=False)
             elecPt = np.concatenate((elecPt, extraSampPt))
 
-    # load in significant channel data
-    sigChan = np.squeeze(
-        sio.loadmat(f'{data_path}/{pt}/{pt}_sigChannel.mat')['sigChannel'])
-    
     # get indices of significant channels in the subsampled set
     _, sigIdx, _ = np.intersect1d(sigChan, elecPt, return_indices=True)
 
     # do sampling over if we don't sample at least 1 significant channel
     if len(sigIdx) == 0:
-        return subsample_sig_channels(pt, nElec, data_path)
+        return pitch_subsample_sig_channels(pt, nElec, data_path)
 
     return sigIdx
 
