@@ -40,7 +40,7 @@ def init_parser():
                         required=False,
                         help='Align pooled data to target data with CCA')
     parser.add_argument('-w', '--win_size', type=str, required='True',
-                        help='Window size for grid subsampling as str "x,y"')
+                        help='Window size for grid subsampling as str "x-y"')
     parser.add_argument('-pp', '--pooled_patients', type=str, default='all',
                         required=False, help='Cross patient indices')
     parser.add_argument('-c', '--cluster', type=str, default='True',
@@ -93,9 +93,7 @@ def aligned_decoding():
         pooled_pts = inputs['pooled_patients'].split(',')
 
     # constant params
-    # n_iter = 3
     # n_folds = 5
-    n_iter = 50
     n_folds = 20
 
     ###### CV GRID ######
@@ -157,25 +155,7 @@ def aligned_decoding():
         filename = out_prefix + (f"{pt}_{'p' if lab_type == 'phon'else 'a'}"
                                  f"{'All' if p_ind == -1 else p_ind}_"
                                  f"{filename_suffix}.pkl")
-
-    print('==================================================================')
-    print("Training model for patient %s." % pt)
-    print("Saving outputs to %s." % (DATA_PATH + 'outputs/'))
-    print('Pool train: %s' % pool_train)
-    print('Target in train: %s' % tar_in_train)
-    print('CCA align: %s' % cca_align)
-    print('Subsample window size: (%s)' % win_size)
-    print('Alignment type: %s' % algn_type)
-    print('Alignment grouping: %s' % algn_grouping)
-    print('Label type: %s' % lab_type)
-    print('Reduction method: %s' % red_method)
-    # print('Reduction components: %d' % n_comp)
-    print('Pooled patients: %s' % pooled_pts)
-    print('Do nested CV: %s' % do_cv)
-    print('Number of iterations: %d' % n_iter)
-    print('Number of folds: %d' % n_folds)
-    print('==================================================================')
-
+        
     # load data
     data_filename = DATA_PATH + 'pt_decoding_data_S62.pkl'
     pt_data = utils.load_pkl(data_filename)
@@ -192,8 +172,41 @@ def aligned_decoding():
     else:
         cross_pt_names = pre_pts
         cross_pt_data = pre_data
-    # print(f'Length of cross pt data: {len(cross_pt_data)}')
-    # print(f'Pooled patients: {[pre_pts[pre_pts.index(p)] for p in pooled_pts]}')
+        
+
+    ### grid subsampling ###
+    # process window size argument
+    win_size = win_size.split('-')
+    win_size = [int(x) for x in win_size]
+
+    # get all possible grid subsamples for target patient
+    tar_subsamp_idx_list = grid_subsample_sig_channels(pt, win_size, DATA_PATH)
+    n_iter = len(tar_subsamp_idx_list)
+    
+    # mkae grid subsamples for cross-patients elements in a list
+    cross_subsamp_idx_list = []
+    for cross_pt in cross_pt_names:
+        cross_subsamp_idx_list.append(
+            grid_subsample_sig_channels(cross_pt, win_size, DATA_PATH)
+        )
+
+    print('==================================================================')
+    print("Training model for patient %s." % pt)
+    print("Saving outputs to %s." % (DATA_PATH + 'outputs/'))
+    print('Pool train: %s' % pool_train)
+    print('Target in train: %s' % tar_in_train)
+    print('CCA align: %s' % cca_align)
+    print('Subsample window size: (%s)' % win_size)
+    print('Alignment type: %s' % algn_type)
+    print('Alignment grouping: %s' % algn_grouping)
+    print('Label type: %s' % lab_type)
+    print('Reduction method: %s' % red_method)
+    # print('Reduction components: %d' % n_comp)
+    print('Pooled patients: %s' % pooled_pts)
+    print('Do nested CV: %s' % do_cv)
+    print('Number of iteratiions: %d' % n_iter)
+    print('Number of folds: %d' % n_folds)
+    print('==================================================================')
 
     out_data = {}
     out_data['params'] = {'pt': pt, 'p_ind': p_ind, 'pool_train': pool_train,
@@ -235,26 +248,11 @@ def aligned_decoding():
     #             decoder
     #             )
 
-
-    # process window size argument
-    win_size = win_size.split(',')
-    win_size = [int(x) for x in win_size]
-
-    # get all possible grid subsamples for target patient
-    tar_subsamp_idx_list = grid_subsample_sig_channels(pt, win_size, DATA_PATH)
-    
-    # mkae grid subsamples for cross-patients elements in a list
-    cross_subsamp_idx_list = []
-    for cross_pt in cross_pt_names:
-        cross_subsamp_idx_list.append(
-            grid_subsample_sig_channels(cross_pt, win_size, DATA_PATH)
-        )
-
     iter_accs = []
     wrong_trs_iter = []
     y_true_iter, y_pred_iter = [], []
     # iterate over possible grid subsamples for the target patient
-    for subsamp_idx in tar_subsamp_idx_list:
+    for j, subsamp_idx in enumerate(tar_subsamp_idx_list):
 
         D_tar_subsamp = D_tar[:,:,subsamp_idx]
 
