@@ -47,6 +47,17 @@ def spatial_avg_sig_channels(pt, contactSize, dataPath):
     return sigIdxList
 
 
+def spatial_avg_data(data, avgIdxs):
+    # assuming incoming data is (trials, channels_x, channels_y, time) and 
+    # avgIdxs is a list of lists of 2d indices for channels that will be
+    # averaged together to a single channel
+    avgData = np.zeros((data.shape[0], len(avgIdxs), data.shape[-1]))
+    for i, idxs in enumerate(avgIdxs):
+        avgData[:, i, :] = np.mean(data[:, idxs[:, 0], idxs[:, 1]], axis=1)
+    avgData = avgData.transpose(0,2,1) # (trials, time, avg channels)
+    return avgData
+
+
 def spatial_avg_idxs(gridSize, contactSize):
     # contacts to average are square subsampled grids, so we re-use the grid
     # subsampling function with the window as a square with edge length equal
