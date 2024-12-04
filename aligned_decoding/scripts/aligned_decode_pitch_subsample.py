@@ -23,7 +23,7 @@ from decomposition.DimRedReshape import DimRedReshape
 from decoders.cross_pt_decoders import (crossPtDecoder_sepDimRed,
                                         crossPtDecoder_sepAlign)
 import alignment.alignment_utils as utils
-from processing_utils.poisson_disk_sampling import subsample_sig_channels
+from processing_utils.poisson_disk_sampling import pitch_subsample_sig_channels
 
 
 def init_parser():
@@ -243,7 +243,8 @@ def aligned_decoding():
         # susbsample channels in all_patients
         cross_pt_subsamp = []
         for curr_pt in [pt] + cross_pt_names:
-            subsamp_idx = subsample_sig_channels(curr_pt, pitch, DATA_PATH)
+            subsamp_idx = pitch_subsample_sig_channels(curr_pt, pitch,
+                                                       DATA_PATH)
             # print(curr_pt)
             # print(len(subsamp_idx))
             # modify target patient data
