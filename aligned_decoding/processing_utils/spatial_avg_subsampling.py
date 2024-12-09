@@ -5,46 +5,50 @@ import matplotlib.pyplot as plt
 from grid_subsampling import grid_susbsample_idxs
 
 
-def spatial_avg_sig_channels(pt, contactSize, dataPath):
+def spatial_avg_sig_channels(pt, contactSize, dataPath, useSig=False):
     # load in channel map
     chanMap = sio.loadmat(f'{dataPath}/{pt}/{pt}_channelMap.mat')['chanMap']
 
-    # load in significant channel data
-    sigChan = np.squeeze(
-        sio.loadmat(f'{dataPath}/{pt}/{pt}_sigChannel.mat')['sigChannel'])
-
     # trim full nan edges if necessary
-    if chanMap.shape[1] == 24:
+    if chanMap.shape[0] == 24: 
+        chanMap = chanMap[1:-1,:]
+    elif chanMap.shape[1] == 24:
         chanMap = chanMap[:,1:-1]
+
+    if useSig:
+        # load in significant channel data
+        sigChan = np.squeeze(
+            sio.loadmat(f'{dataPath}/{pt}/{pt}_sigChannel.mat')['sigChannel'])
 
     # get spatial average indices
     gridSize = chanMap.shape
     avgIdxs = spatial_avg_idxs(gridSize, contactSize)
 
+    if useSig:
+        sigIdxList = []
+        for idxs in avgIdxs:
+            elecPt = chanMap[idxs[:, 0], idxs[:, 1]]
+            
+            # don't consider sets with over half nans
+            if np.sum(np.isnan(elecPt)) >= len(elecPt) / 2:
+                continue
+            else: # remove nans
+                goodIdxs = ~np.isnan(elecPt)
+                elecPt = elecPt[goodIdxs].astype(int)
+                idxsPt = idxs[goodIdxs]
 
-    sigIdxList = []
-    for idxs in avgIdxs:
-        elecPt = chanMap[idxs[:, 0], idxs[:, 1]]
-        
-        # don't consider sets with over half nans
-        if np.sum(np.isnan(elecPt)) >= len(elecPt) / 2:
-            continue
-        else: # remove nans
-            goodIdxs = ~np.isnan(elecPt)
-            elecPt = elecPt[goodIdxs].astype(int)
-            idxsPt = idxs[goodIdxs]
+            # see if any significant channels are in the subsampled set
+            commonElec = np.intersect1d(sigChan, elecPt)
 
-        # see if any significant channels are in the subsampled set
-        commonElec = np.intersect1d(sigChan, elecPt)
-
-        # only save if we sample at least 1 significant channel
-        if commonElec.size > 0:
-            sigIdxList.append(idxsPt)
+            # only save if we sample at least 1 significant channel
+            if commonElec.size > 0:
+                sigIdxList.append(idxsPt)
+        return sigIdxList
     
-    # return channels in coodinate form since the averaging may contain non-
+    # return channels in coordinate form since the averaging may contain non-
     # significant channels and we need to access grid form of data for non-
     # significant channels
-    return sigIdxList
+    return avgIdxs
 
 
 def spatial_avg_data(data, avgIdxs):
