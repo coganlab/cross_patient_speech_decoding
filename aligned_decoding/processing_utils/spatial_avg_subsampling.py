@@ -2,7 +2,8 @@ import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 
-from grid_subsampling import grid_susbsample_idxs
+from .grid_subsampling import grid_susbsample_idxs
+# from processing_utils.grid_subsampling import grid_susbsample_idxs
 
 
 def spatial_avg_sig_channels(pt, contactSize, dataPath, useSig=False):
