@@ -12,7 +12,10 @@ def grid_subsample_sig_channels(pt, winSize, dataPath, step=(1,1)):
         sio.loadmat(f'{dataPath}/{pt}/{pt}_sigChannel.mat')['sigChannel'])
 
     # trim full nan edges if necessary
-    if chanMap.shape[1] == 24:
+    if chanMap.shape[0] == 24: 
+        chanMap = chanMap[1:-1,:]
+        winSize = (winSize[1], winSize[0]) # transpose window size
+    elif chanMap.shape[1] == 24:
         chanMap = chanMap[:,1:-1]
 
     # get possible subgrids
