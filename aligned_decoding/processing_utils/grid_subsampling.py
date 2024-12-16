@@ -12,7 +12,10 @@ def grid_subsample_sig_channels(pt, winSize, dataPath, step=(1,1)):
         sio.loadmat(f'{dataPath}/{pt}/{pt}_sigChannel.mat')['sigChannel'])
 
     # trim full nan edges if necessary
-    if chanMap.shape[1] == 24:
+    if chanMap.shape[0] == 24: 
+        chanMap = chanMap[1:-1,:]
+        winSize = (winSize[1], winSize[0]) # transpose window size
+    elif chanMap.shape[1] == 24:
         chanMap = chanMap[:,1:-1]
 
     # get possible subgrids
@@ -38,10 +41,10 @@ def grid_subsample_sig_channels(pt, winSize, dataPath, step=(1,1)):
     return sigElecList
 
     
-def grid_susbsample_idxs(grid_size, win_size, step=(1,1)):
+def grid_susbsample_idxs(gridSize, winSize, step=(1,1), start=(0,0)):
     # starting indices to placec windows in grid
-    startIdxX = np.arange(0, grid_size[0] - win_size[0] + 1, step[0])
-    startIdxY = np.arange(0, grid_size[1] - win_size[1] + 1, step[1])
+    startIdxX = np.arange(start[0], gridSize[0] - winSize[0] + 1, step[0])
+    startIdxY = np.arange(start[1], gridSize[1] - winSize[1] + 1, step[1])
 
     # use meshgrid to get all possible combinations of starting indices
     startIdxs = np.array(np.meshgrid(startIdxX, startIdxY))
@@ -50,8 +53,8 @@ def grid_susbsample_idxs(grid_size, win_size, step=(1,1)):
     gridIdxs = []
     for (x,y) in startIdxs:
         # define x-y span of window from current starting point
-        currIdxsX = np.arange(x, x + win_size[0])
-        currIdxsY = np.arange(y, y + win_size[1])
+        currIdxsX = np.arange(x, x + winSize[0])
+        currIdxsY = np.arange(y, y + winSize[1])
 
         # get full grid indices from x-y span
         currIdxs = np.array(np.meshgrid(currIdxsX, currIdxsY))

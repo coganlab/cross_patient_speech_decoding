@@ -179,7 +179,6 @@ def aligned_decoding():
     # load data
     data_filename = DATA_PATH + 'pt_decoding_data_S62.pkl'
     pt_data = utils.load_pkl(data_filename)
-    pt_names = list(pt_data.keys())
     pre_pts = pt_data[pt]['pre_pts']
     tar_data, pre_data = utils.decoding_data_from_dict(pt_data, pt, p_ind,
                                                        lab_type=lab_type,
