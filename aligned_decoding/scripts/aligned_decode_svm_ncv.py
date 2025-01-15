@@ -54,6 +54,8 @@ def init_parser():
     parser.add_argument('-tss', '--trial_subsample', type=float, default=1.0,
                         required=False, help='Fraction of trials to subsample'
                         'from training data')
+    parser.add_argument('-surr', '--surrogate', type=str, default='False',
+                        required=False, help='Use TME surrogate data')
     parser.add_argument('-pp', '--pooled_patients', type=str, default='all',
                         required=False, help='Cross patient indices')
     parser.add_argument('-c', '--cluster', type=str, default='True',
@@ -103,6 +105,7 @@ def aligned_decoding():
     random_data = str2bool(inputs['random_data'])
     no_S23 = str2bool(inputs['no_S23'])
     tr_subsamp_r = inputs['trial_subsample']
+    use_surr = str2bool(inputs['surrogate'])
     do_cv = str2bool(inputs['cross_validate'])
 
     pooled_pts = []
@@ -227,7 +230,10 @@ def aligned_decoding():
     # data_filename = DATA_PATH + 'pt_decoding_data_S22.pkl'
     # data_filename = DATA_PATH + 'pt_decoding_data_S39.pkl'
     # data_filename = DATA_PATH + 'pt_decoding_data_S58.pkl'
-    data_filename = DATA_PATH + 'pt_decoding_data_S62.pkl'
+    if use_surr:
+        data_filename = DATA_PATH + 'pt_decoding_data_S62_TME.pkl'
+    else:
+        data_filename = DATA_PATH + 'pt_decoding_data_S62.pkl'
     pt_data = utils.load_pkl(data_filename)
     tar_data, pre_data = utils.decoding_data_from_dict(pt_data, pt, p_ind,
                                                        lab_type=lab_type,
