@@ -219,6 +219,7 @@ def aligned_decoding():
     print('Reduction method: %s' % red_method)
     # print('Reduction components: %d' % n_comp)
     print('Trial subsampling ratio: %f' % inputs['trial_subsample'])
+    print('Use surrogate data: %s' % use_surr)
     print('Pooled patients: %s' % pooled_pts)
     print('Do nested CV: %s' % do_cv)
     print('Number of iterations: %d' % n_iter)
@@ -232,6 +233,7 @@ def aligned_decoding():
     # data_filename = DATA_PATH + 'pt_decoding_data_S58.pkl'
     if use_surr:
         data_filename = DATA_PATH + 'pt_decoding_data_S62_TME.pkl'
+        print('##### Using surrogate data #####')
     else:
         data_filename = DATA_PATH + 'pt_decoding_data_S62.pkl'
     pt_data = utils.load_pkl(data_filename)
