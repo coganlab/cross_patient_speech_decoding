@@ -34,9 +34,12 @@ class SimpleMicroDataModule(L.LightningDataModule):
             train_data, test_data = self.data[train_idx], self.data[test_idx]
             train_labels, test_labels = (self.labels[train_idx],
                                          self.labels[test_idx])
+            n_classes = len(torch.unique(train_labels))
 
             if self.val_size > 0:
-                if len(train_labels.shape) > 1:
+                if self.val_size * len(train_data) < n_classes:
+                    split_labels = None
+                elif len(train_labels.shape) > 1:
                     split_labels = train_labels[:,0]
                 else:
                     split_labels = train_labels
@@ -199,9 +202,12 @@ class AlignedMicroDataModule(L.LightningDataModule):
                                          self.labels[test_idx])
             test_labels = test_labels.squeeze(1)
             align_labels = self.align_labels[train_idx]
+            n_classes = len(torch.unique(train_labels))
 
             if self.val_size > 0:
-                if len(train_labels.shape) > 1:
+                if self.val_size * len(train_data) < n_classes:
+                    split_labels = None
+                elif len(train_labels.shape) > 1:
                     split_labels = train_labels[:,0]
                 else:
                     split_labels = train_labels
