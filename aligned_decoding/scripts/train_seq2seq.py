@@ -69,6 +69,7 @@ def seq2seq_decoding():
     val_size = 0.1
 
     fold_data_path = os.path.expanduser(f'~/workspace/nn_data/datamodules/{pt}/') + context_prefix
+    os.makedirs(fold_data_path, exist_ok=True)
 
     if pool_train:
         context_prefix = 'pooled'
@@ -109,12 +110,12 @@ def seq2seq_decoding():
     print(summarize(sum_model))
 
     ##### Train model #####
-
-    # instantiate the trainer
     max_epochs = 500
     log_dir = os.path.expanduser(f'~/workspace/nn_data/nn_logs/{pt}/')
-
     acc_dir = os.path.expanduser(f'~/workspace/nn_data/accs/{pt}')
+    os.makedirs(log_dir, exist_ok=True)
+    os.makedirs(acc_dir, exist_ok=True)
+    os.makedirs(os.path.join(acc_dir, f'{context_prefix}/iters/'), exist_ok=True)
 
     # train the model
     n_iters = 20
@@ -155,7 +156,7 @@ def seq2seq_decoding():
         
         # save accuracies fold by fold in case of interruption
         iter_accs.append(fold_accs)
-        with open(os.path.join(acc_dir, f'{context_prefix}/{pt}_{context_prefix}_seq2seq_rnn_accs_iter{i+1}.csv'), 'w') as f:
+        with open(os.path.join(acc_dir, f'{context_prefix}/iters/{pt}_{context_prefix}_seq2seq_rnn_accs_iter{i+1}.csv'), 'w') as f:
             writer = csv.writer(f)
             writer.writerows(iter_accs)
         print(np.mean(fold_accs))
