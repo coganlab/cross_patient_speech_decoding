@@ -40,12 +40,16 @@ def seq2seq_decoding():
     pt = inputs['patient']
     pool_train = str2bool(inputs['pool_train'])
 
+    if pool_train:
+        context_prefix = 'pooled'
+    else:
+        context_prefix = 'ptSpecific'
+
     ##### Data module definition #####
     data_filename = os.path.expanduser('~/data/pt_decoding_data_S62.pkl')
     # data_filename = ('../data/pt_decoding_data_S62.pkl')
     pt_data = utils.load_pkl(data_filename)
 
-    pt = 'S14'
     p_ind = 1
     lab_type = 'phon'
     algn_type = 'phon_seq'
@@ -72,12 +76,10 @@ def seq2seq_decoding():
     os.makedirs(fold_data_path, exist_ok=True)
 
     if pool_train:
-        context_prefix = 'pooled'
         dm = AlignedMicroDataModule(data, align_labels, align_labels, pool_data, AlignCCA,
                                     batch_size=batch_size, folds=n_folds, val_size=val_size,
                                     augmentations=augmentations, data_path=fold_data_path)
     else:
-        context_prefix = 'ptSpecific'
         dm = SimpleMicroDataModule(data, align_labels, batch_size=batch_size, folds=n_folds,
                                val_size=val_size, augmentations=augmentations, data_path=fold_data_path)
 
@@ -167,3 +169,7 @@ def seq2seq_decoding():
         writer = csv.writer(f)
         writer.writerows(iter_accs)
     np.save(os.path.join(acc_dir, f'{context_prefix}/{pt}_{context_prefix}_seq2seq_rnn_accs.npy'), np.array(iter_accs))
+
+
+if __name__ == '__main__':
+    seq2seq_decoding()
