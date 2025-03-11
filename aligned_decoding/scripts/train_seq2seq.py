@@ -10,7 +10,7 @@ import argparse
 sys.path.append('..')
 from alignment import alignment_utils as utils
 from alignment.AlignCCA import AlignCCA
-from nn_models.data_utils.datamodules import SimpleMicroDataModule, AlignedMicroDataModule
+from nn_models.data_utils.datamodules import SimpleMicroDataModule, AlignedMicroDataModule, AlignedMicroValDataModule
 import nn_models.data_utils.augmentations as augs
 from nn_models.models import Seq2SeqRNN
 import csv
@@ -41,7 +41,8 @@ def seq2seq_decoding():
     pool_train = str2bool(inputs['pool_train'])
 
     if pool_train:
-        context_prefix = 'pooled'
+        # context_prefix = 'pooled'
+        context_prefix = 'pooled_val_lstm'
     else:
         context_prefix = 'ptSpecific'
 
@@ -70,13 +71,16 @@ def seq2seq_decoding():
     # create the data module
     batch_size = 5000
     n_folds = 20
-    val_size = 0.1
+    val_size = 0.2
 
     fold_data_path = os.path.expanduser(f'~/workspace/nn_data/datamodules/{pt}/') + context_prefix
     os.makedirs(fold_data_path, exist_ok=True)
 
     if pool_train:
-        dm = AlignedMicroDataModule(data, align_labels, align_labels, pool_data, AlignCCA,
+        # dm = AlignedMicroDataModule(data, align_labels, align_labels, pool_data, AlignCCA,
+        #                             batch_size=batch_size, folds=n_folds, val_size=val_size,
+        #                             augmentations=augmentations, data_path=fold_data_path)
+        dm = AlignedMicroValDataModule(data, align_labels, align_labels, pool_data, AlignCCA,
                                     batch_size=batch_size, folds=n_folds, val_size=val_size,
                                     augmentations=augmentations, data_path=fold_data_path)
     else:
@@ -103,7 +107,7 @@ def seq2seq_decoding():
     learning_rate = 1e-4
     l2_reg = 1e-5
     activ = False
-    model_type = 'gru'
+    model_type = 'lstm'
 
     sum_model = Seq2SeqRNN(in_channels, n_filters, hidden_size, num_classes, n_enc_layers,
                         n_dec_layers, kernel_size, stride, padding, cnn_dropout,
@@ -120,7 +124,7 @@ def seq2seq_decoding():
     os.makedirs(os.path.join(acc_dir, f'{context_prefix}/iters/'), exist_ok=True)
 
     # train the model
-    n_iters = 20
+    n_iters = 50
     iter_accs = []
     for i in range(n_iters):
         print(f'##### Setting up data module for iteration {i+1} #####')
