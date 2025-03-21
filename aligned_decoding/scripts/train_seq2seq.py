@@ -107,7 +107,7 @@ def seq2seq_decoding():
     learning_rate = 1e-4
     l2_reg = 1e-5
     activ = False
-    model_type = 'lstm'
+    model_type = 'gru'
 
     sum_model = Seq2SeqRNN(in_channels, n_filters, hidden_size, num_classes, n_enc_layers,
                         n_dec_layers, kernel_size, stride, padding, cnn_dropout,
