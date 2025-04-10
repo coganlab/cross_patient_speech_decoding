@@ -83,3 +83,17 @@ def get_high_gamma_data(filename):
     phon_labels = get_feature_data(mat_data, 'phonSeqLabels')
 
     return hg_trace, hg_map, phon_labels
+
+
+def get_high_gamma_data_spatialAvg(filename, contactSizes):
+    # contact sizes is list of strings of contact sizes in axb format
+    # (1x1, 2x2, etc.)
+    mat_data = load_mat_data(filename)
+
+    phon_labels = get_feature_data(mat_data, 'phonSeqLabels')
+
+    csDictTrace = {}
+    for cs in contactSizes:
+        csDictTrace[cs] = get_feature_data(mat_data, 'cs_' + cs)
+    
+    return csDictTrace, phon_labels
