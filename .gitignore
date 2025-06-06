@@ -146,3 +146,5 @@ dmypy.json
 **/checkpoints/
 **/lightning_logs/
 **/fold_data
+*/processing_utils/test_*
+IEEG_Pipelines/
