@@ -34,9 +34,12 @@ class SimpleMicroDataModule(L.LightningDataModule):
             train_data, test_data = self.data[train_idx], self.data[test_idx]
             train_labels, test_labels = (self.labels[train_idx],
                                          self.labels[test_idx])
+            n_classes = len(torch.unique(train_labels))
 
             if self.val_size > 0:
-                if len(train_labels.shape) > 1:
+                if self.val_size * len(train_data) < n_classes:
+                    split_labels = None
+                elif len(train_labels.shape) > 1:
                     split_labels = train_labels[:,0]
                 else:
                     split_labels = train_labels
@@ -199,9 +202,12 @@ class AlignedMicroDataModule(L.LightningDataModule):
                                          self.labels[test_idx])
             test_labels = test_labels.squeeze(1)
             align_labels = self.align_labels[train_idx]
+            n_classes = len(torch.unique(train_labels))
 
             if self.val_size > 0:
-                if len(train_labels.shape) > 1:
+                if self.val_size * len(train_data) < n_classes:
+                    split_labels = None
+                elif len(train_labels.shape) > 1:
                     split_labels = train_labels[:,0]
                 else:
                     split_labels = train_labels
@@ -371,6 +377,72 @@ class AlignedMicroDataModule(L.LightningDataModule):
             with h5py.File(self.data_path / 'fold_data' / f'fold_{self.current_fold}.h5', 'r') as f:
                 data_shape = f['train_data'][()].shape
             return data_shape
+
+
+class AlignedMicroValDataModule(AlignedMicroDataModule):
+    ### OVERRIDING SETUP METHOD FOR CROSS-PATIENT DATA TO EXPAND VALIDATION SET
+    def setup(self, stage=None):
+        cv = self.select_cv(self.folds)
+        for k, (train_idx, test_idx) in enumerate(cv.split(self.data, self.labels.squeeze(1))):
+            train_data, test_data = self.data[train_idx], self.data[test_idx]
+            train_labels, test_labels = (self.labels[train_idx],
+                                         self.labels[test_idx])
+            test_labels = test_labels.squeeze(1)
+            align_labels = self.align_labels[train_idx]
+            n_classes = len(torch.unique(train_labels))
+
+            ### MAIN DIFFERENCE - ALIGNING DATA BEFORE SPLITTING TO TRAIN/VAL
+            train_data, train_labels, dim_red = (
+                process_aligner(train_data, train_labels, align_labels,
+                                self.pool_data, self.algner))
+            align_labels
+
+            if self.val_size > 0:
+                if self.val_size * len(train_data) < n_classes:
+                    split_labels = None
+                elif len(train_labels.shape) > 1:
+                    split_labels = train_labels[:,0]
+                else:
+                    split_labels = train_labels
+                train_data, val_data, train_labels, val_labels = \
+                    (train_test_split(train_data, train_labels,
+                                     test_size=self.val_size,
+                                     stratify=split_labels))
+                val_labels = val_labels.squeeze(1)
+            else:
+                val_data, val_labels = None, None
+
+            aug_data = torch.cat((torch.Tensor([]), train_data))
+            aug_labels = torch.cat((torch.empty((0, train_labels.shape[-1])).long(), train_labels))
+            # aug_align_labels = torch.cat((torch.empty((0, align_labels.shape[-1])).long(), align_labels))
+            for aug in self.augmentations:
+                aug_data = torch.cat((aug_data, aug(train_data)))
+                aug_labels = torch.cat((aug_labels, train_labels))
+                # aug_align_labels = torch.cat((aug_align_labels, align_labels))
+
+            
+            # clear unnecessary data after augmentations
+            del train_data, train_labels, align_labels
+
+            # if val_data is not None:
+            #     val_shape = val_data.shape
+            #     val_data = dim_red.transform(val_data.reshape(-1, val_shape[-1]))
+            #     val_data = torch.Tensor(val_data.reshape(val_shape[0], val_shape[1], -1))
+            test_shape = test_data.shape
+            test_data = dim_red.transform(test_data.reshape(-1, test_shape[-1]))
+            test_data = torch.Tensor(test_data.reshape(test_shape[0], test_shape[1], -1))
+
+            # save fold precomputed fold data to hdf5 file to load in later
+            os.makedirs(self.data_path / 'fold_data', exist_ok=True)
+            with h5py.File(self.data_path / 'fold_data' / f'fold_{k}.h5', 'w') as f:
+                # f.create_dataset('train_data', data=train_data)
+                # f.create_dataset('train_labels', data=train_labels)
+                f.create_dataset('train_data', data=aug_data)
+                f.create_dataset('train_labels', data=aug_labels)
+                f.create_dataset('val_data', data=val_data)
+                f.create_dataset('val_labels', data=val_labels)
+                f.create_dataset('test_data', data=test_data)
+                f.create_dataset('test_labels', data=test_labels)
     
 
 def process_aligner(X, y, y_align, pool_data, algner, n_components=0.95):

@@ -62,44 +62,6 @@ def str2bool(s):
     return s.lower() == 'true'
 
 
-def decoding_maps_from_dict(data_dict, pt, p_ind, lab_type, algn_type):
-    # modification of function from alignment_utils.py to load in map data
-    # for taret and pre-training patients
-    D_tar, lab_tar, lab_tar_full = get_maps_labels(data_dict[pt], p_ind,
-                                                       lab_type, algn_type)
-
-    pre_data = []
-    for p_pt in data_dict[pt]['pre_pts']:
-        D_curr, lab_curr, lab_curr_full = get_maps_labels(data_dict[p_pt],
-                                                              p_ind, lab_type,
-                                                              algn_type)
-        pre_data.append((D_curr, lab_curr, lab_curr_full))
-
-    return (D_tar, lab_tar, lab_tar_full), pre_data
-
-
-def get_maps_labels(data, p_ind, lab_type, algn_type):
-    # modification of function from alignment_utils.py to load in map data
-    lab_full = data['y_full_' + algn_type[:-4]]
-    if p_ind == -1:  # collapsed across all phonemes
-        D = get_collapsed_maps(data)
-        lab = data['y_' + lab_type + '_collapsed']
-        lab_full = np.tile(lab_full, (3, 1))  # label repeat for shape match
-    else:  # individual phoneme
-        D = data['X' + str(p_ind) + '_map']
-        lab = data['y' + str(p_ind)]
-    return D, lab, lab_full
-
-
-def get_collapsed_maps(data):
-    # make map data for all positions collapsed together manually
-    out_data = []
-    for i in [1,2,3]:
-        out_data.append(data['X' + str(i) + '_map'])
-    out_data = np.concatenate(out_data, axis=0)
-    return out_data
-
-
 def aligned_decoding():
     parser = init_parser()
     args = parser.parse_args()
@@ -198,22 +160,27 @@ def aligned_decoding():
                                  f"{filename_suffix}.pkl")
         
     # load data
-    data_filename = DATA_PATH + 'pt_decoding_data_S62.pkl'
-    # data_filename = DATA_PATH + 'pt_decoding_data_S62_zscore.pkl'
-    pt_data = utils.load_pkl(data_filename)
-    pre_pts = pt_data[pt]['pre_pts']
-    tar_data, pre_data = decoding_maps_from_dict(pt_data, pt, p_ind,
-                                                 lab_type=lab_type,
-                                                 algn_type=algn_type)
-    D_tar, lab_tar, lab_tar_full = tar_data
+    data_filename = DATA_PATH + 'pt_savg_data_S62.pkl'
+    
+    all_pt_savg_data = utils.load_pkl(data_filename)
+    pt_savg_data, pre_savg_data = utils.decoding_data_from_dict(
+        all_pt_savg_data, pt, p_ind, lab_type=lab_type, algn_type=algn_type)
+    pre_pts = all_pt_savg_data[pt]['pre_pts'] 
+    cs_str = f'{contact_size}x{contact_size}'
+    D_tar_subsamp = pt_savg_data[0][cs_str]
+    lab_tar = pt_savg_data[1]
+    lab_tar_full = pt_savg_data[2]
 
     if len(pooled_pts) > 0:
-        cross_pt_names = pooled_pts
-        cross_pt_data = [pre_data[pre_pts.index(p)] for p in pooled_pts]
+        cross_pts = pooled_pts
     else:
-        cross_pt_names = pre_pts
-        cross_pt_data = pre_data
-        
+        cross_pts = pre_pts
+    cross_pt_subsamp = []
+    for p in cross_pts:
+        D_cross = pre_savg_data[pre_pts.index(p)][0][cs_str]
+        lab_cross = pre_savg_data[pre_pts.index(p)][1]
+        lab_cross_full = pre_savg_data[pre_pts.index(p)][2]
+        cross_pt_subsamp.append((D_cross, lab_cross, lab_cross_full))      
 
     print('==================================================================')
     print("Training model for patient %s." % pt)
@@ -274,42 +241,12 @@ def aligned_decoding():
     #             decoder
     #             )
 
-    ### spatial averaging ###
-    # get all spatial average channel sets for target patient
-    tar_subsamp_idx_list = spatial_avg_sig_channels(pt, contact_size,
-                                                    DATA_PATH)
-    
-    # mkae grid subsamples for cross-patients elements in a list
-    cross_subsamp_idx_list = []
-    for cross_pt in cross_pt_names:
-        cross_subsamp_idx_list.append(
-            spatial_avg_sig_channels(cross_pt, contact_size, DATA_PATH)
-        )
-
     iter_accs = []
     wrong_trs_iter = []
     y_true_iter, y_pred_iter = [], []
     # grid orientation is pre-calculated so this is just iteration over
     # data splitting
     for j in range(n_iter):
-
-        D_tar_subsamp = spatial_avg_data(D_tar, tar_subsamp_idx_list)
-
-        # subsample channels in cross patients
-        cross_pt_subsamp = []
-        for curr_pt, cross_idx_list in zip(cross_pt_names,
-                                           cross_subsamp_idx_list):
-            curr_idx = cross_pt_names.index(curr_pt)
-            curr_D = cross_pt_data[curr_idx][0].copy()
-
-            # create a new tuple with the subsampled data
-            new_tup = (
-                spatial_avg_data(curr_D, cross_idx_list),
-                cross_pt_data[curr_idx][1],
-                cross_pt_data[curr_idx][2],
-            )
-            cross_pt_subsamp.append(new_tup)
-
         y_true_all, y_pred_all = [], []
         wrong_trs_fold = []
 
