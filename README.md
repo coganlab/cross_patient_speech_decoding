@@ -1,4 +1,4 @@
-# Cross Patient Speech Decoding
+# Cross patient speech decoding from shared latent representations of speech production
 
 ![](figures/overview_fig.png)
 
