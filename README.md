@@ -16,7 +16,7 @@ All analyses were performed in Python $\geq$ 3.10. Packages used can be found in
 
 ## Usage
 
-Analyses and code for all main figures in the paper (excluding figure 1, which is primarily illustrative) can be found in `aligned_decoding/figures_analyses/fig_X.ipynb` as notebooks stepping through anaylses performed in each figure. Analyses and code for relevant supplementary figures is also included in `aligned_decoding/figure_analyses/supp/supp_fig_X.ipynb`.
+Analyses and code for all main figures in the paper (excluding figure 1, which is primarily illustrative) can be found in `aligned_decoding/figure_analyses/fig_X.ipynb` as notebooks stepping through anaylses performed in each figure. Analyses and code for relevant supplementary figures is also included in `aligned_decoding/figure_analyses/supp/supp_fig_X.ipynb`.
 
 Aditional directories within `aligned_decoding/` contain `.py` files with functionality relevant to various analyses:
 - `aligned_decoding/alignment/`: Classes and utility funcitons for various alignment methods, including CCA, multiview CCA (MCCA), and joing PCA.
