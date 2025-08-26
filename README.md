@@ -8,7 +8,7 @@ This repository contains code used in analyses and creation of figures for the p
 
 We use an approach based on canonical correlation analysis (CCA) to learn an alignment between latent neural representations of speech production recorded with micro-electrocorticography (μECoG) arrays from multiple patients. We show that patient-specific neural data can be aligned to a shared cross-patient latent space, enabling the training of cross-patient speech decoding models that outperform patient-specific models.
 
-For more details, please check out our preprint! [Spalding et al. 2025, bioRxiv](https://TODO_MAKE_ARXIV_LINK.wow)
+For more details, please check out our preprint! [Spalding et al. 2025, bioRxiv](https://www.biorxiv.org/content/10.1101/2025.08.21.671516v2)
 
 ## Requirements
 
