@@ -19,7 +19,7 @@ All analyses were performed in Python $\geq$ 3.10. Packages used can be found in
 Analyses and code for all main figures in the paper (excluding figure 1, which is primarily illustrative) can be found in `aligned_decoding/figure_analyses/fig_X.ipynb` as notebooks stepping through anaylses performed in each figure. Analyses and code for relevant supplementary figures is also included in `aligned_decoding/figure_analyses/supp/supp_fig_X.ipynb`.
 
 Aditional directories within `aligned_decoding/` contain `.py` files with functionality relevant to various analyses:
-- `aligned_decoding/alignment/`: Classes and utility funcitons for various alignment methods, including CCA, multiview CCA (MCCA), and joing PCA.
+- `aligned_decoding/alignment/`: Classes and utility funcitons for various alignment methods, including CCA, multiview CCA (MCCA), and joint PCA.
 - `aligned_decoding/decoders/`: Wrapper classes to enable easy cross-patient decoding with *scikit-learn*-style decoders.
 - `aligned_decoding/decomposition/`: Dimensionality reduction methods, including a wrapper to perform dimensionality reduction while properly reshaping data with more than two dimensions.
 - `aligned_decoding/nn_models/`: Classes and utility functions defining *PyTorch Lightning* modules for training sequence-to-sequence recurrent neural networks with both patient-specific and cross-patient inputs.
