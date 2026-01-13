@@ -148,3 +148,4 @@ dmypy.json
 **/fold_data
 */processing_utils/test_*
 IEEG_Pipelines/
+*.h5
