@@ -4,6 +4,7 @@ data/
 dcc_shell_scripts/
 acc_data/
 *.mp4
+**/outputs
 
 ##### Default Python gitignore #####
 
