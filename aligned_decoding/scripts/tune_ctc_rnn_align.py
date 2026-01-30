@@ -23,7 +23,9 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # sys.path.append(str(Path('~/repos/cross_patient_speech_decoding/aligned_decoding').expanduser()))
+sys.path.append(str(Path('~/repos/cross_patient_micro/cross_patient_speech_decoding/aligned_decoding').expanduser()))
 # import realtime_sim
+# import alignment
 from realtime_sim.ctc_decoder import greedy_decode_batch
 from realtime_sim.realtime_datamodule import (CTCHeldOutDataModule,
                                               CTCHeldOutTargetValAlignDataModule,
@@ -33,6 +35,7 @@ import realtime_sim.augmentations as augs
 
 # ray.init(runtime_env={'py_modules': [realtime_sim]}, num_cpus=5, num_gpus=1, object_store_memory=16e9, include_dashboard=False, _temp_dir=str(Path('~/workspace/ray_tmp').expanduser()), ignore_reinit_error=True)
 ray.init(num_cpus=10, num_gpus=1, object_store_memory=16e9, include_dashboard=False, _temp_dir=str(Path('~/workspace/ray_tmp').expanduser()), ignore_reinit_error=True)
+# ray.init(runtime_env={'py_modules': [realtime_sim, alignment]}, num_cpus=10, num_gpus=1, object_store_memory=16e9, include_dashboard=False, _temp_dir=str(Path('E:/workspace/ray_tmp').expanduser()), ignore_reinit_error=True)
 
 N_SIL = 0
 BLANK_TOKEN = 0
@@ -114,7 +117,7 @@ def main(cfg: DictConfig) -> None:
                                          )
 
             # Append to training data
-            X_train_cross.append(X_pt_r)
+            X_train_cross.append(X_pt)
             y_train_cross.append(y_pt)
     else:
         # Placeholders for cross-patient data in patient-specific case
@@ -183,8 +186,9 @@ def main(cfg: DictConfig) -> None:
         dm.setup()
 
         # Define model
+        data_shapes = dm.get_data_shape()
         model = RealtimeRNNModel(
-            input_size=X_train_tgt.shape[-1]*cfg.model.win_size,
+            input_size=data_shapes[-1]*cfg.model.win_size,
             hidden_size=best_tune_cfg['hidden_size'],
             n_layers=best_tune_cfg['n_layers'],
             n_classes=len(PHON_DICT),
@@ -369,8 +373,9 @@ def train_func(hp_config, cfg=None, X_train_tgt=None, y_train_tgt=None, X_train_
     dm.setup()
 
     # Define model
+    data_shapes = dm.get_data_shape()
     model = RealtimeRNNModel(
-        input_size=X_train_tgt.shape[-1]*cfg.model.win_size,
+        input_size=data_shapes*cfg.model.win_size,
         hidden_size=hp_config['hidden_size'],
         n_layers=hp_config['n_layers'],
         n_classes=len(PHON_DICT),
@@ -413,7 +418,7 @@ def train_func_cv(hp_config, cfg=None, X_train_tgt=None, y_train_tgt=None, X_tra
         rand_idx = np.random.permutation(y_train_tgt.shape[0])
         y_train_tgt = y_train_tgt[rand_idx]
 
-    dm = CTCHeldOutTargetValCVDataModule(
+    dm = CTCHeldOutTargetValAlignCVDataModule(
             X_train_tgt,
             y_train_tgt,
             X_train_cross,
@@ -424,6 +429,8 @@ def train_func_cv(hp_config, cfg=None, X_train_tgt=None, y_train_tgt=None, X_tra
             n_folds=cfg.tuning.n_folds,
             augmentations=aug_list,
             data_path=dm_path / f'{cfg.target_pt}_data',
+            pool=cfg.pool_train,
+            align=cfg.align_train,
         )
     dm.setup()
 
@@ -432,8 +439,9 @@ def train_func_cv(hp_config, cfg=None, X_train_tgt=None, y_train_tgt=None, X_tra
     for fold in range(dm.n_folds):
         dm.set_fold(fold)
 
+        data_shapes = dm.get_data_shape()
         model = RealtimeRNNModel(
-            input_size=X_train_tgt.shape[-1] * cfg.model.win_size,
+            input_size=data_shapes[-1] * cfg.model.win_size,
             hidden_size=hp_config['hidden_size'],
             n_layers=hp_config['n_layers'],
             n_classes=len(PHON_DICT),
@@ -472,7 +480,6 @@ def train_func_cv(hp_config, cfg=None, X_train_tgt=None, y_train_tgt=None, X_tra
     })
 
     
-
 def tune_func(search_space, cfg, X_train_tgt, y_train_tgt, X_train_cross, y_train_cross, X_test, y_test, algo='random', cv=False):
     if cv:
         train_fn = train_func_cv
@@ -490,7 +497,7 @@ def tune_func(search_space, cfg, X_train_tgt, y_train_tgt, X_train_cross, y_trai
                                        X_test=X_test,
                                        y_test=y_test,
                                    ), 
-                                   resources={'CPU': 1, 'GPU': 0.1},
+                                   resources={'CPU': 1, 'GPU': 1},
                 )
 
     if algo == 'random':
@@ -516,6 +523,7 @@ def create_rndm_tuner(search_space, cfg, trainable):
             mode='min',
             num_samples=cfg.tuning.n_trials,
             # scheduler=scheduler,
+            trial_dirname_creator=lambda trial: f'trial_{trial.trial_id}',
         ),
         run_config=tune.RunConfig(
             storage_path=Path('~/workspace/ray_results').expanduser(),
@@ -588,8 +596,9 @@ def run_single_iteration(
     )
     dm.setup()
 
+    data_shapes = dm.get_data_shape()
     model = RealtimeRNNModel(
-        input_size=X_train_tgt.shape[-1] * cfg.model.win_size,
+        input_size=data_shapes[-1] * cfg.model.win_size,
         hidden_size=best_tune_cfg["hidden_size"],
         n_layers=best_tune_cfg["n_layers"],
         n_classes=len(PHON_DICT),
@@ -740,6 +749,8 @@ def select_datamodule(cfg, X_train_tgt, y_train_tgt, X_train_cross,
             val_size=val_size,
             augmentations=augmentations,
             data_path=data_dir / f'{cfg.target_pt}_data',
+            pool=cfg.pool_train,
+            align=cfg.align_train,
         )
     else:
         dm = CTCHeldOutDataModule(
