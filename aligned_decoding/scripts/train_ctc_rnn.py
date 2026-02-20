@@ -1,6 +1,7 @@
 import numpy as np
 import h5py
 import torch
+from sklearn.model_selection import train_test_split
 import lightning as L
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.loggers import TensorBoardLogger
@@ -15,10 +16,10 @@ warnings.filterwarnings('ignore')
 
 sys.path.append('..')
 from realtime_sim.ctc_decoder import greedy_decode_batch
-from realtime_sim.realtime_datamodule import CTCHeldOutDataModule, CTCHeldOutTargetValDataModule
+from realtime_sim.realtime_datamodule import (CTCHeldOutDataModule,
+                                              CTCHeldOutTargetValAlignDataModule)
 from realtime_sim.realtime_nn_model import RealtimeRNNModel
 import realtime_sim.augmentations as augs
-
 
 N_SIL = 0
 BLANK_TOKEN = 0
@@ -53,6 +54,10 @@ def main(cfg: DictConfig) -> None:
     if missing_keys:
         raise RuntimeError(f'Missing configuration keys: {missing_keys}')
     
+    print('Configuration:', flush=True)
+    for key, value in cfg.items():
+        print(f'  {key}: {value}', flush=True)
+    
     # Setup logging
     logger = make_logger(cfg.paths.nn_log_dir,
                          cfg.target_pt,
@@ -63,8 +68,6 @@ def main(cfg: DictConfig) -> None:
     cfg.paths.results_dir = Path(cfg.paths.results_dir).expanduser()
     cfg.paths.nn_data_dir = Path(cfg.paths.nn_data_dir).expanduser()
     cfg.paths.nn_log_dir = Path(cfg.paths.nn_log_dir).expanduser()
-    cfg.paths.pca_path = Path(cfg.paths.pca_path).expanduser()
-    cfg.paths.cca_path = Path(cfg.paths.cca_path).expanduser()
 
     # Load data from target patient
     X_train_tgt, y_train_tgt, X_test, y_test = load_data(
@@ -76,39 +79,24 @@ def main(cfg: DictConfig) -> None:
             only_train=False,
             n_sil=N_SIL,
         )
+    if cfg.data_proc.target_subsample < 1:
+        # train test split to subsample training data with stratification
+        try:
+            X_train_tgt, _, y_train_tgt, _ = train_test_split(X_train_tgt,
+                                        y_train_tgt,
+                                        train_size=cfg.data_proc.target_subsample,
+                                        stratify=y_train_tgt[:,0],
+                                        shuffle=True)
+        except ValueError:  # when fraction is too small to stratify
+            X_train_tgt, _, y_train_tgt, _ = train_test_split(X_train_tgt,
+                                        y_train_tgt,
+                                        train_size=cfg.data_proc.target_subsample,
+                                        shuffle=True)
 
     # (Optional) Pooling data from other patients
-    pooled_data = []
-    pooled_labels = []
-    if cfg.pool_train:
-        # project target data to latent space
-        n_trs_train_tgt, n_time_tgt, n_chan_tgt = X_train_tgt.shape
-        n_trs_test_tgt, _, _ = X_test.shape
-        pca_xform_tgt = load_pca_xform(cfg.paths.pca_path, cfg.target_pt)
-
-        X_train_r = X_train_tgt.reshape(-1, n_chan_tgt)
-        X_train_r -= np.mean(X_train_r, axis=0, keepdims=True)
-        X_train_r = np.dot(X_train_r, pca_xform_tgt).reshape(n_trs_train_tgt, n_time_tgt, -1)
-        X_train_tgt = X_train_r
-
-        X_test_r = X_test.reshape(-1, n_chan_tgt)
-        X_test_r -= np.mean(X_test_r, axis=0, keepdims=True)
-        X_test_r = np.dot(X_test_r, pca_xform_tgt).reshape(n_trs_test_tgt, n_time_tgt, -1)
-        X_test = X_test_r
-
-        # align target data to desired pt space if align pt is different from target pt
-        if cfg.align_train and cfg.target_pt != cfg.align_pt:
-            n_latents = X_train_tgt.shape[-1]
-
-            cca_xform_tgt = load_cca_xform(cfg.paths.cca_path, cfg.align_pt, cfg.target_pt)
-            X_train_algn = X_train_tgt.reshape(-1, n_latents)
-            X_train_algn = np.dot(X_train_algn, cca_xform_tgt).reshape(n_trs_train_tgt, n_time_tgt, -1)
-            X_train_tgt = X_train_algn
-
-            X_test_algn = X_test.reshape(-1, n_latents)
-            X_test_algn = np.dot(X_test_algn, cca_xform_tgt).reshape(n_trs_test_tgt, n_time_tgt, -1)
-            X_test = X_test_algn
-        
+    X_train_cross = []
+    y_train_cross = []
+    if cfg.pool_train:        
         # Load in data from other patients
         other_pts = [pt for pt in cfg.train_pts if pt != cfg.target_pt]
         for pt in other_pts:
@@ -124,76 +112,51 @@ def main(cfg: DictConfig) -> None:
                                          load_all=load_all,
                                          n_sil=N_SIL,
                                          )
-            n_trs_pt, n_time_pt, n_chan_pt = X_pt.shape
-
-            # load offline PCA transform
-            pca_xform = load_pca_xform(cfg.paths.pca_path, pt)
-
-            # demean in realtime space instead of using saved mean from offline PCA
-            X_pt_r = X_pt.reshape(-1, n_chan_pt)
-            X_pt_r -= np.mean(X_pt_r, axis=0, keepdims=True)
-
-            # transform to latent space
-            X_pt_r = np.dot(X_pt_r, pca_xform).reshape(n_trs_pt, n_time_pt, -1)
-
-            # (Optional) Align to desired patient space (not necessarily target patient)
-            if cfg.align_train and pt != cfg.align_pt:
-                n_latents = X_pt_r.shape[-1]
-
-                cca_xform = load_cca_xform(cfg.paths.cca_path, cfg.align_pt, pt)
-                X_pt_algn = X_pt_r.reshape(-1, n_latents)
-                X_pt_algn = np.dot(X_pt_algn, cca_xform).reshape(n_trs_pt, n_time_pt, -1)
-                X_pt_r = X_pt_algn
 
             # Append to training data
-            pooled_data.append(X_pt_r)
-            pooled_labels.append(y_pt)
-
-        # Truncate unaligned data to consistent dimensionality across patients
-        if not cfg.align_train:
-            all_pt_data = [X_train_tgt] + pooled_data
-            min_dim = min([data.shape[-1] for data in all_pt_data])
-
-            X_train_tgt = X_train_tgt[:, : , :min_dim]
-            X_test = X_test[:, :, :min_dim]
-            pooled_data = [data[:, :, :min_dim] for data in pooled_data]
-
-        X_train_cross = np.concatenate(pooled_data, axis=0)
-        y_train_cross = np.concatenate(pooled_labels, axis=0)
+            X_train_cross.append(X_pt)
+            y_train_cross.append(y_pt)
     else:
         # Placeholders for cross-patient data in patient-specific case
         X_train_cross = None
         y_train_cross = None
-        
-    if cfg.compute_chance:
-        # Shuffle training labels by trial for chance performance
-        rand_idx = np.random.permutation(y_train_tgt.shape[0])
-        y_train_tgt = y_train_tgt[rand_idx]
 
-    # Define data module
-    augs_list = [AUGS_DICT[aug] for aug in cfg.training.augmentations]
-    dm = select_datamodule(cfg, X_train_tgt, y_train_tgt, X_train_cross,
-                            y_train_cross, X_test, y_test,
-                            cfg.training.batch_size, cfg.training.val_size,
-                            augs_list, cfg.paths.nn_data_dir)
-    dm.setup()
+    # Load optimal hyperparameters from tuning runs
+    best_tune_cfg = load_hparams(cfg)
+    print('Loaded hyperparameters:', best_tune_cfg, flush=True)
 
+    # Train model over multiple iterations with optimal hyperparamters
     pers_all = []
     logits_all = []
     for i in range(cfg.training.n_iter):
 
+        # reshuffle chance labels for each iteration
+        if cfg.compute_chance:
+            # Shuffle training labels by trial for chance performance
+            rand_idx = np.random.permutation(y_train_tgt.shape[0])
+            y_train_tgt = y_train_tgt[rand_idx]
+
+        # Define data module
+        augs_list = [AUGS_DICT[aug] for aug in cfg.training.augmentations]
+        dm = select_datamodule(cfg, X_train_tgt, y_train_tgt, X_train_cross,
+                            y_train_cross, X_test, y_test,
+                            int(best_tune_cfg['batch_size']), cfg.training.val_size,
+                            augs_list, cfg.paths.nn_data_dir)
+        dm.setup()
+
         # Define model
+        data_shapes = dm.get_data_shape()
         model = RealtimeRNNModel(
-            input_size=X_train_tgt.shape[-1]*cfg.model.win_size,
-            hidden_size=cfg.model.hidden_size,
-            n_layers=cfg.model.n_layers,
+            input_size=data_shapes[-1]*cfg.model.win_size,
+            hidden_size=int(best_tune_cfg['hidden_size']),
+            n_layers=int(best_tune_cfg['n_layers']),
             n_classes=len(PHON_DICT),
-            dropout=cfg.model.dropout,
+            dropout=float(best_tune_cfg['dropout']),
             win_size=cfg.model.win_size,
             stride=cfg.model.stride,
-            learning_rate=cfg.training.learning_rate,
-            decay_steps=cfg.training.n_epochs,
-            weight_decay=cfg.model.l2_reg,
+            learning_rate=float(best_tune_cfg['learning_rate']),
+            decay_steps=int(cfg.training['n_epochs']),
+            weight_decay=float(best_tune_cfg['l2_reg']),
         )
 
         # Model training
@@ -204,7 +167,7 @@ def main(cfg: DictConfig) -> None:
         trainer = L.Trainer(
             accelerator='auto',
             max_epochs=cfg.training.n_epochs,
-            gradient_clip_val=cfg.training.gclip_val,
+            gradient_clip_val=float(best_tune_cfg['gclip_val']),
             callbacks=callbacks,
             logger=logger,
             enable_progress_bar=False,
@@ -263,7 +226,7 @@ def make_logger(log_dir, pt, cfg):
         save_dir=log_dir,
         name=f'{log_str}_ctcRnn',
     )
-    return logger    
+    return logger
 
 
 def load_data(data_filename, pt, tw_select, tw_orig, zscore=False, only_train=False, load_all=False, n_sil=2):
@@ -310,7 +273,7 @@ def select_datamodule(cfg, X_train_tgt, y_train_tgt, X_train_cross,
                       y_train_cross, X_test, y_test, batch_size,
                       val_size, augmentations, data_dir):
     if cfg.pool_train:
-        dm = CTCHeldOutTargetValDataModule(
+        dm = CTCHeldOutTargetValAlignDataModule(
             X_train_tgt,
             y_train_tgt,
             X_train_cross,
@@ -321,6 +284,9 @@ def select_datamodule(cfg, X_train_tgt, y_train_tgt, X_train_cross,
             val_size=val_size,
             augmentations=augmentations,
             data_path=data_dir / f'{cfg.target_pt}_data',
+            pool=cfg.pool_train,
+            n_comp=cfg.data_proc.n_components,
+            align=cfg.align_train,
         )
     else:
         dm = CTCHeldOutDataModule(
@@ -336,25 +302,39 @@ def select_datamodule(cfg, X_train_tgt, y_train_tgt, X_train_cross,
     return dm
 
 
-def make_chance_labels(n_trials, seq_length, n_phonemes=9, n_sil=2):
-    labels = np.random.randint(1, n_phonemes + 1, size=(n_trials, seq_length - 2 * n_sil))
-    for _ in range(n_sil):
-        labels = np.insert(labels, 0, SIL_TOKEN, axis=1)
-        labels = np.insert(labels, labels.shape[1], SIL_TOKEN, axis=1)
-    return labels
+def load_hparams(cfg, hparam_dir='~/data/results/decoding/ctc_results_tuneRndm30CV_90varNoDel_computeAlign_augs/'):
+    # get parameters from input configuration as default
+    best_tune_cfg = {
+        'batch_size': cfg.training.batch_size,
+        'learning_rate': cfg.training.learning_rate,
+        'gclip_val': cfg.training.gclip_val,
+        'hidden_size': cfg.model.hidden_size,
+        'n_layers': cfg.model.n_layers,
+        'dropout': cfg.model.dropout,
+        'l2_reg': cfg.model.l2_reg,
+    }
 
+    if cfg.pool_train:
+        if cfg.align_train:
+            context = 'aligned'
+        else:
+            context = 'unaligned'
+    elif cfg.compute_chance:
+        context = 'chance'
+    else:
+        context = 'ptSpecific'
+    fname = Path(hparam_dir).expanduser() / cfg.target_pt / f'{cfg.target_pt}_ctcRNN_{context}_hp.h5'
 
-def load_pca_xform(pca_path, pt):
-    with h5py.File(pca_path, 'r') as f:
-        # load PCA components - transpose for projection to latent space
-        pca_xform = f[f'{pt}/components'][:].T
-    return pca_xform
+    try:
+        with h5py.File(fname, 'r') as f:
+            # replace default keys if found in hparam file
+            for k, v in f.items():
+                if k in best_tune_cfg.keys():
+                    best_tune_cfg[k] = v[()]
+    except FileNotFoundError:
+        print('Saved hyparameters not found! Using defaults from yaml config file.')
 
-
-def load_cca_xform(cca_path, target_pt, source_pt):
-    with h5py.File(cca_path, 'r') as f:
-        cca_xform = f[f'{source_pt}_to_{target_pt}/components'][:]
-    return cca_xform
+    return best_tune_cfg
 
 
 def calc_norm_edit_distance(input_seqs, target_seqs):
@@ -373,6 +353,7 @@ def save_results(save_dir, cfg, pt, pers_all, logits_all, phon_dict, model_hpara
     save_dir = Path(save_dir)
     save_fname = f'{pt}/{pt}_ctcRNN_decodeTW([{cfg.data_proc.tw_select[0]},{cfg.data_proc.tw_select[1]}])'
     suffix = '_ptSpecific'
+
     if cfg.pool_train:
         if cfg.align_train:
             suffix = '_aligned'
@@ -381,6 +362,11 @@ def save_results(save_dir, cfg, pt, pers_all, logits_all, phon_dict, model_hpara
     if cfg.compute_chance:
         suffix = '_chance'
     save_fname += suffix
+
+    tgt_r = cfg.data_proc.target_subsample
+    tgt_subsamp_str = f'_tgtSubsamp{(tgt_r*100):.0f}' if tgt_r < 1 else ''
+    save_fname += tgt_subsamp_str
+
     save_path = save_dir / (save_fname + '.h5')
     save_path.parent.mkdir(parents=True, exist_ok=True)
 
