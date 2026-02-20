@@ -4,6 +4,7 @@ import lightning as L
 import numpy as np
 from sklearn.model_selection import StratifiedKFold, KFold, train_test_split
 from sklearn.decomposition import PCA
+from numpy.linalg import LinAlgError
 import h5py
 import os
 from pathlib import Path
@@ -196,7 +197,7 @@ class CTCHeldOutTargetValAlignDataModule(CTCHeldOutDataModule):
     def __init__(self, train_data_tgt, train_labels_tgt, train_data_cross,
                  train_labels_cross, test_data, test_labels, batch_size=128,
                  val_size=0.2, augmentations=None, data_path=None, pool=True,
-                 dim_red=PCA, align=True, aligner=AlignCCA):
+                 dim_red=PCA, n_comp=30, align=True, aligner=AlignCCA):
         L.LightningDataModule().__init__()
         self.train_data_tgt = torch.Tensor(train_data_tgt)
         self.train_labels_tgt = torch.Tensor(train_labels_tgt).long()
@@ -214,6 +215,7 @@ class CTCHeldOutTargetValAlignDataModule(CTCHeldOutDataModule):
         self.data_path = Path(os.getcwd() if data_path is None else data_path)
         self.pool = pool
         self.dim_red = dim_red
+        self.n_components = n_comp
         self.align = align
         self.aligner = aligner
 
@@ -236,13 +238,18 @@ class CTCHeldOutTargetValAlignDataModule(CTCHeldOutDataModule):
             val_data, val_labels = None, None
         test_data = self.test_data.clone()
         test_labels = self.test_labels.clone()
-        train_data_cross = self.train_data_cross.copy()
-        train_labels_cross = self.train_labels_cross.copy()
+        if self.train_data_cross is not None:
+            train_data_cross = self.train_data_cross.copy()
+            train_labels_cross = self.train_labels_cross.copy()
+        else:
+            train_data_cross = None
+            train_labels_cross = None
 
         # reduce data to latent space if pooling across patients
         if self.pool:
             train_data_tgt, tgt_pca = reduce_to_latent_space(
-                                            train_data_tgt
+                                            train_data_tgt,
+                                            n_components=self.n_components,
                                         )
             # apply same reduction to val and test data
             val_data, _ = reduce_to_latent_space(val_data, pca=tgt_pca)
@@ -250,7 +257,8 @@ class CTCHeldOutTargetValAlignDataModule(CTCHeldOutDataModule):
             if self.train_data_cross is not None:
                 for j in range(len(train_data_cross)):
                     data_red, _ = reduce_to_latent_space(
-                                    train_data_cross[j]
+                                    train_data_cross[j],
+                                    n_components=self.n_components,
                                 )
                     train_data_cross[j] = data_red
             # align data if specified
@@ -446,7 +454,7 @@ class CTCHeldOutTargetValAlignCVDataModule(CTCHeldOutTargetValCVDataModule):
     def __init__(self, train_data_tgt, train_labels_tgt, train_data_cross,
                  train_labels_cross, test_data, test_labels, batch_size=128,
                  n_folds=5, augmentations=None, data_path=None, pool=True,
-                 dim_red=PCA, align=True, aligner=AlignCCA):
+                 dim_red=PCA, n_comp=30, align=True, aligner=AlignCCA):
         L.LightningDataModule().__init__()
         self.train_data_tgt = torch.Tensor(train_data_tgt)
         self.train_labels_tgt = torch.Tensor(train_labels_tgt).long()
@@ -465,6 +473,7 @@ class CTCHeldOutTargetValAlignCVDataModule(CTCHeldOutTargetValCVDataModule):
         self.data_path = Path(os.getcwd() if data_path is None else data_path)
         self.pool = pool
         self.dim_red = dim_red
+        self.n_components = n_comp
         self.align = align
         self.aligner = aligner
         
@@ -480,13 +489,18 @@ class CTCHeldOutTargetValAlignCVDataModule(CTCHeldOutTargetValCVDataModule):
             val_labels = self.train_labels_tgt[val_idx]
             test_data = self.test_data.clone()
             test_labels = self.test_labels.clone()
-            train_data_cross = self.train_data_cross.copy()
-            train_labels_cross = self.train_labels_cross.copy()
+            if self.train_data_cross is not None:
+                train_data_cross = self.train_data_cross.copy()
+                train_labels_cross = self.train_labels_cross.copy()
+            else:
+                train_data_cross = None
+                train_labels_cross = None
 
             # reduce data to latent space if pooling across patients
             if self.pool:
                 train_data_tgt, tgt_pca = reduce_to_latent_space(
-                                                train_data_tgt
+                                                train_data_tgt,
+                                                n_components=self.n_components,
                                             )
                 # apply same reduction to val and test data
                 val_data, _ = reduce_to_latent_space(val_data, pca=tgt_pca)
@@ -494,7 +508,8 @@ class CTCHeldOutTargetValAlignCVDataModule(CTCHeldOutTargetValCVDataModule):
                 if train_data_cross is not None:
                     for j in range(len(train_data_cross)):
                         data_red, _ = reduce_to_latent_space(
-                                        train_data_cross[j]
+                                        train_data_cross[j],
+                                        n_components=self.n_components,
                                     )
                         train_data_cross[j] = data_red
                 # align data if specified
@@ -584,7 +599,7 @@ def select_cv(folds, labels):
     return cv
 
 
-def reduce_to_latent_space(data, pca=None, n_components=30):
+def reduce_to_latent_space(data, pca=None, n_components=30, low_thresh=5):
     shapes = data.shape
     data_2d = data.reshape(-1, shapes[-1])
 
@@ -592,11 +607,39 @@ def reduce_to_latent_space(data, pca=None, n_components=30):
         dr = pca
         data_r = dr.transform(data_2d)
     else:
-        dr = PCA(n_components=n_components)
-        data_r = dr.fit_transform(data_2d)
-        # if dr.n_components_ <= 1:
-        #     dr = PCA(n_components=30)
-        #     data_r = dr.fit_transform(data_2d)
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                dr = PCA(n_components=n_components)
+                data_r = dr.fit_transform(data_2d)
+                break
+            except LinAlgError as e:
+                if ("SVD did not converge" in str(e) and 
+                    attempt < max_retries - 1):
+                    continue
+                else:
+                    raise
+        
+        if dr.n_components_ <= low_thresh:
+            # too few components likely means component representing large
+            # noise/artifact in data, so just use 30 components and remove
+            # the first component as likely culprit
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    dr = PCA(n_components=30)
+                    data_r = dr.fit_transform(data_2d)
+                    break
+                except LinAlgError as e:
+                    if ("SVD did not converge" in str(e) and 
+                        attempt < max_retries - 1):
+                        continue
+                    else:
+                        raise
+            # data_r = data_r[:, 1:]  # remove first component from data
+            # # make sure PCA object is consistent with component removal
+            # dr.n_components_ = dr.n_components_ - 1
+            # dr.components_ = dr.components_[1:, :]
     data_r = torch.Tensor(data_r.reshape(shapes[0], shapes[1], -1))
 
     return data_r, dr
