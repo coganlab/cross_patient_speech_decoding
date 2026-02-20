@@ -20,15 +20,16 @@ compute_chance: false
 paths:
   data_dir: '~/data/ctc_data/'
   data_fname: 'ctc_data_stim_impute.h5'
-  results_dir: '~/workspace/ctc_results_tuneRndm_calcAlignTest_augs/'
+  results_dir: '~/workspace/ctc_results_tuneRndm30CV_90varNoDel_computeAlign_augs/'
   nn_data_dir: '~/workspace/ctcRNN_runs/datamodules'
   nn_log_dir: '~/workspace/ctcRNN_runs/logs'
+  # commented PCA/CCA paths out below after changing to on-the-fly alignment
   # pca_path: '~/data/ctc_data/pt_pcas_30comp.h5'
   # cca_path: '~/data/ctc_data/pt_ccas_30comp.h5'
   # pca_path: '~/data/ctc_data/pt_pcas_30comp_tw([0.5,1.5]).h5'
   # cca_path: '~/data/ctc_data/pt_ccas_30comp_tw([0.5,1.5]).h5'
-  pca_path: '~/data/ctc_data/pt_pcas_90var.h5'
-  cca_path: '~/data/ctc_data/pt_ccas_90var.h5'
+  # pca_path: '~/data/ctc_data/pt_pcas_90var.h5'
+  # cca_path: '~/data/ctc_data/pt_ccas_90var.h5'
   # pca_path: '~/data/ctc_data/pt_pcas_90var_z.h5'
   # cca_path: '~/data/ctc_data/pt_ccas_90var_z.h5'
 
@@ -36,23 +37,24 @@ paths:
 data_proc:
   tw_select:
     - 0.5
-    - 4
+    - 3.5
   tw_orig:
     - 0
     - 4
   # zscore: true
   zscore: false
+  n_components: 0.9 # for alignment calc in datamodule, irrelevant for precompuuted PCAs/CCAs
 
 ### Hyperparameter tuning parameters ###
 tuning:
   algo: 'random'  # 'random' or 'bohb'
-  n_trials: 5
+  n_trials: 30
   do_cv: true
   n_folds: 5
 
 ### Training parameters ###
 training:
-  n_iter: 10
+  n_iter: 50
   batch_size: 64
   n_epochs: 300
   learning_rate: 1e-3

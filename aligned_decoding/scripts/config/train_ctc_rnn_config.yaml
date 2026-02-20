@@ -1,5 +1,6 @@
 ### Main script parameters ###
-target_pt: ???
+# target_pt: ???
+target_pt: S14
 train_pts:
   - S14
   - S22
@@ -19,29 +20,33 @@ compute_chance: false
 paths:
   data_dir: '~/data/ctc_data/'
   data_fname: 'ctc_data_stim_impute.h5'
-  results_dir: '~/workspace/ctc_results_90var_augs/'
+  results_dir: '~/workspace/ctc_results_90varNoDel_computeAlign_augs/'
   nn_data_dir: '~/workspace/ctcRNN_runs/datamodules'
   nn_log_dir: '~/workspace/ctcRNN_runs/logs'
+  # commented PCA/CCA paths out below after changing to on-the-fly alignment
   # pca_path: '~/data/ctc_data/pt_pcas_30comp.h5'
   # cca_path: '~/data/ctc_data/pt_ccas_30comp.h5'
   # pca_path: '~/data/ctc_data/pt_pcas_90var.h5'
   # cca_path: '~/data/ctc_data/pt_ccas_90var.h5'
-  pca_path: '~/data/ctc_data/pt_pcas_90var_z.h5'
-  cca_path: '~/data/ctc_data/pt_ccas_90var_z.h5'
+  # pca_path: '~/data/ctc_data/pt_pcas_90var_z.h5'
+  # cca_path: '~/data/ctc_data/pt_ccas_90var_z.h5'
 
 ### Data processing parameters ###
 data_proc:
   tw_select:
     - 0.5
-    - 4
+    - 3.5
   tw_orig:
     - 0
     - 4
   zscore: false
+  n_components: 0.9 # for alignment calc in datamodule, irrelevant for precompuuted PCAs/CCAs
+  target_subsample: 1
+
 
 ### Training parameters ###
 training:
-  n_iter: 10
+  n_iter: 50
   batch_size: 512
   n_epochs: 300
   learning_rate: 1e-3
