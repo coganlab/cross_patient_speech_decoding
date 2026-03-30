@@ -101,8 +101,3 @@ def compute_bin_power(data):
 
     # binned_power = signal.resample(binned_power, 4, axis=-1)
     return binned_power
-
-
-# def create_HG_filter(f_hg, fs, trans_width=10, order=60):
-#     # create log-spaced center frequencies
-#     cfs = np.logspace(np.log10(f_hg[0]), np.log10(f_hg[-1]), len(f_hg))
