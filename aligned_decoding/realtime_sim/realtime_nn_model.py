@@ -1,6 +1,8 @@
 import torch
 from torch import nn
 from torchaudio.functional import edit_distance
+from torchmetrics.wrappers import Running
+from torchmetrics import CharErrorRate
 import lightning as L
 
 # from .ctc_decoder import greedy_decode_torch
@@ -71,20 +73,10 @@ class RealtimeRNNModel(L.LightningModule):
 
         self.criterion = nn.CTCLoss(blank=blank, zero_infinity=True)
 
-    # def forward(self, x):
-    #     # input x shape x: (batches, time_steps, channels)
+        per_metric = CharErrorRate()
+        self.val_PER_running = Running(per_metric, window=100)
 
-    #     # reformat time_steps to overlapping prediction windows
-    #     # x: (batches, n_windows, channels * win_size)
-    #     x = self.reformat_time_windows(x)
 
-    #     # generate predictions
-    #     x = self.rnn(x)
-    #     x = self.classifier(x)s
-    #     return x
-    # ----------------------------------------------------------------------
-    # ✔ NEW: forward() with learned h₀ and matched behavior
-    # ----------------------------------------------------------------------
     def forward(self, x):
         # x: (B, T, C)
         x = self.reformat_time_windows(x)
@@ -96,32 +88,11 @@ class RealtimeRNNModel(L.LightningModule):
         logits = self.classifier(out)
         return logits
 
-    # def reformat_time_windows(self, x):
-    #     """ Inspired by https://github.com/Neuroprosthetics-Lab/nejm-brain-to-text/blob/main/model_training/rnn_model.py
-    #     reformatting of raw timesteps into overlapping windows at desired prediction latency
-    #     (latency defined by stride)
-    #     """
-    #     hps = self.hparams
-    #     win_size = hps.win_size
-    #     stride = hps.stride
-
-    #     # x: (batches, time_steps, channels)
-    #     batch_size, time_steps, n_channels = x.size()
-
-    #     # Breakout into overlapping windows
-    #     x_unfold = x.unfold(1, win_size, stride)  # (batches, n_windows, channels, win_size))
-    #     x_unfold = x_unfold.permute(0, 1, 3, 2)  # (batches, n_windows, win_size, channels)
-
-    #     # Flatten the window dimension into the channel dimension
-    #     x = x_unfold.contiguous().view(batch_size, x_unfold.size(1), -1)  # (batches, n_windows, channels * win_size)
-
-    #     return x
-
-    # ----------------------------------------------------------------------
-    # ✔ NEW: Right-aligned sliding windows that match the reference code
-    # ----------------------------------------------------------------------
     def reformat_time_windows(self, x):
         """
+        Inspired by https://github.com/Neuroprosthetics-Lab/nejm-brain-to-text/blob/main/model_training/rnn_model.py
+        reformatting of raw timesteps into overlapping windows at desired prediction latency
+        (latency defined by stride)
         Convert (B, T, C) into right-aligned sliding windows (B, n_windows, C*win).
         """
         B, T, C = x.size()
@@ -189,13 +160,11 @@ class RealtimeRNNModel(L.LightningModule):
         with torch.no_grad():
             decoded = greedy_decode_batch(log_probs)
 
-            edit_dist = sum(
-                edit_distance(pred, tgt[:l])
-                for pred, tgt, l in zip(decoded, targets, target_lengths)
-            )
+            per = calc_PER(decoded, targets, target_lengths)
+            self.val_PER_running.update(decoded, targets)
 
-            per = edit_dist / target_lengths.sum() * 100
             self.log('val_PER', per, on_step=False, on_epoch=True, prog_bar=True)
+            self.log('val_PER_running', self.val_PER_running, on_step=False, on_epoch=True, prog_bar=True)
 
         return loss
 
@@ -220,4 +189,13 @@ class RealtimeRNNModel(L.LightningModule):
         )
 
         return [optimizer], [scheduler]
-        # return optimizer
+
+
+def calc_PER(decoded, targets, target_lengths):
+    edit_dist = sum(
+        edit_distance(pred, tgt[:l])
+        for pred, tgt, l in zip(decoded, targets, target_lengths)
+    )
+
+    per = edit_dist / target_lengths.sum() * 100
+    return per
