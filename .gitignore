@@ -5,6 +5,7 @@ dcc_shell_scripts/
 acc_data/
 *.mp4
 **/outputs
+**/resp_to_reviewers
 
 ##### Default Python gitignore #####
 
@@ -150,3 +151,5 @@ dmypy.json
 */processing_utils/test_*
 IEEG_Pipelines/
 *.h5
+**/realtime_sim.ipynb
+requirements_OLD.txt
