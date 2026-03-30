@@ -41,7 +41,8 @@ def pitch_subsample_sig_channels(pt, pitch, data_path):
         elecIdx = np.round(elecIdx).astype(int) - 1
 
         # convert 2D coordinates to channel numbers
-        elecPt = chanMap[elecIdx[:, 0], elecIdx[:, 1]].astype(int)
+        elecPt = chanMap[elecIdx[:, 0], elecIdx[:, 1]]
+        elecPt = np.nan_to_num(elecPt, nan=-1).astype(int)
 
         # check if we need to sample more electrodes
         if elecPt.shape[0] < nElec and spacing == 1:
