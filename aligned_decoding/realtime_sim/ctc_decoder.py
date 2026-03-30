@@ -35,6 +35,7 @@ def logsumexp(*args):
                       for a in args))
   return a_max + lsp
 
+
 def decode(probs, beam_size=100, blank=0):
   """
   Performs inference for the given output probabilities.
@@ -161,29 +162,6 @@ def beam_decode_torch(probs, beam_size=100, blank=0):
     best_prefix = max(beam.items(), key=lambda x: torch.logsumexp(x[1], dim=0).item())
     return best_prefix[0], -torch.logsumexp(best_prefix[1], dim=0).item()
 
-
-# def greedy_decode_torch(probs, blank=0):
-#     """
-#     CTC greedy decoding in PyTorch
-
-#     probs: (T, S) log probabilities (after log_softmax)
-#     blank: index of CTC blank
-#     """
-#     T, S = probs.shape
-#     device = probs.device
-
-#     best_path = torch.argmax(probs, dim=1)  # (T,)
-
-#     # Collapse repeated characters and remove blanks
-#     decoded = []
-#     prev = None
-#     for t in range(T):
-#         p = best_path[t].item()
-#         if p != blank and p != prev:
-#             decoded.append(p)
-#         prev = p
-
-#     return tuple(decoded)
 
 def greedy_decode_batch(log_probs, blank=0):
     """
