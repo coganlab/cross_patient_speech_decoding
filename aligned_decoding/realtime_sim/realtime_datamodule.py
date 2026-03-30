@@ -170,11 +170,6 @@ class CTCHeldOutTargetValDataModule(CTCHeldOutDataModule):
         for aug in self.augmentations:
             aug_data   = torch.cat((aug_data,   aug(train_data)))
             aug_labels = torch.cat((aug_labels, train_labels))
-        # aug_data = torch.cat((torch.Tensor([]), train_data))
-        # aug_labels = torch.cat((torch.Tensor([]).long(), train_labels))
-        # for aug in self.augmentations:
-        #     aug_data = torch.cat((aug_data, aug(train_data)))
-        #     aug_labels = torch.cat((aug_labels, train_labels))
 
         # save fold precomputed fold data to hdf5 file to load in later
         os.makedirs(self.data_path, exist_ok=True)
@@ -636,10 +631,6 @@ def reduce_to_latent_space(data, pca=None, n_components=30, low_thresh=5):
                         continue
                     else:
                         raise
-            # data_r = data_r[:, 1:]  # remove first component from data
-            # # make sure PCA object is consistent with component removal
-            # dr.n_components_ = dr.n_components_ - 1
-            # dr.components_ = dr.components_[1:, :]
     data_r = torch.Tensor(data_r.reshape(shapes[0], shapes[1], -1))
 
     return data_r, dr
