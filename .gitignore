@@ -153,3 +153,5 @@ IEEG_Pipelines/
 *.h5
 **/realtime_sim.ipynb
 requirements_OLD.txt
+
+**/pcas
