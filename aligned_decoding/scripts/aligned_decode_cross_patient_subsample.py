@@ -1,3 +1,10 @@
+"""Cross-patient decoding with trial subsampling from pooled patients.
+
+Evaluates how the amount of cross-patient training data affects decoding
+accuracy by incrementally increasing the number of trials sampled from
+each pooled patient. Supports CCA, MCCA, and joint-PCA alignment.
+"""
+
 import sys
 import os
 import argparse
@@ -30,6 +37,12 @@ import alignment.alignment_utils as utils
 
 
 def init_parser():
+    """Create argument parser for cross-patient trial-subsampled decoding.
+
+    Returns:
+        argparse.ArgumentParser: Configured parser with patient, alignment,
+            cross-validation, and output arguments.
+    """
     parser = argparse.ArgumentParser(description='Cross-patient decoding with'
                                      'subsampling of pooeld data across patients.')
     parser.add_argument('-pt', '--patient', type=str, required=True,
@@ -63,6 +76,14 @@ def init_parser():
 
 
 def str2bool(s):
+    """Convert a string to a boolean value.
+
+    Args:
+        s: String to convert (case-insensitive).
+
+    Returns:
+        bool: True if the string equals 'true' (case-insensitive).
+    """
     return s.lower() == 'true'
 
 
@@ -79,6 +100,13 @@ def str2bool(s):
 
     
 def pooled_sampled_decoding():
+    """Run cross-patient decoding with incremental trial subsampling.
+
+    Sweeps over increasing numbers of trials sampled per cross-patient,
+    runs aligned SVM decoding with stratified k-fold cross-validation
+    at each trial count, and stores the resulting accuracy matrix and
+    trial counts to disk after every iteration.
+    """
     parser = init_parser()
     args = parser.parse_args()
 

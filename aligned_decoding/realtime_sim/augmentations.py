@@ -1,3 +1,9 @@
+"""Data augmentation transforms for time-series neural feature tensors.
+
+Each function accepts a batch tensor of shape (B, T, F) and returns an
+augmented copy of the same shape.
+"""
+
 import torch
 import numpy as np
 import scipy.ndimage
@@ -56,11 +62,29 @@ def time_shifting(data, shift_max=20):
 
 
 def noise_jitter(data, noise_level=0.01):
+    """Adds Gaussian noise to the data.
+
+    Args:
+        data: Input tensor of shape (B, T, F).
+        noise_level: Standard deviation of the additive noise.
+
+    Returns:
+        Noisy copy of the input tensor.
+    """
     noise = torch.randn_like(data) * noise_level
     return data + noise
 
 
 def scaling(data, scale_range=(0.9, 1.1)):
+    """Randomly scales each sample in the batch by a uniform factor.
+
+    Args:
+        data: Input tensor of shape (B, T, F).
+        scale_range: (min, max) bounds for the uniform scaling factor.
+
+    Returns:
+        Scaled copy of the input tensor.
+    """
     B = data.size(0)
     scales = torch.empty(B, 1, 1, device=data.device).uniform_(*scale_range)
     return data * scales

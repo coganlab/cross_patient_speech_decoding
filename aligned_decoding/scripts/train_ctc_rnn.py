@@ -1,3 +1,11 @@
+"""Training script for CTC-RNN speech decoding models.
+
+Trains a realtime RNN model with CTC loss for phoneme sequence decoding
+from micro-electrode neural recordings. Loads tuned hyperparameters,
+supports patient-specific and cross-patient pooled training with optional
+alignment, and evaluates via normalized phoneme error rate.
+"""
+
 import numpy as np
 import h5py
 import torch
@@ -49,6 +57,19 @@ AUGS_DICT = {
 
 @hydra.main(version_base=None, config_path="config", config_name="train_ctc_rnn_config")
 def main(cfg: DictConfig) -> None:
+    """Entry point for CTC-RNN training with Hydra configuration.
+
+    Loads data, retrieves tuned hyperparameters, trains the model over
+    multiple iterations, evaluates phoneme error rate on held-out test
+    data, and saves results.
+
+    Args:
+        cfg: Hydra DictConfig with paths, data processing, model,
+            and training parameters.
+
+    Raises:
+        RuntimeError: If required configuration keys are missing.
+    """
     # Check for missing keys in config
     missing_keys = OmegaConf.missing_keys(cfg)
     if missing_keys:
@@ -212,6 +233,17 @@ def main(cfg: DictConfig) -> None:
 
 
 def make_logger(log_dir, pt, cfg):
+    """Create a TensorBoard logger with a context-aware experiment name.
+
+    Args:
+        log_dir: Directory for TensorBoard log files.
+        pt: Patient identifier string.
+        cfg: Hydra DictConfig with pool_train, align_train, and
+            compute_chance flags.
+
+    Returns:
+        TensorBoardLogger: Configured logger instance.
+    """
     log_str = f'{pt}'
     suffix = '_ptSpecific'
     if cfg.pool_train:
@@ -230,6 +262,25 @@ def make_logger(log_dir, pt, cfg):
 
 
 def load_data(data_filename, pt, tw_select, tw_orig, zscore=False, only_train=False, load_all=False, n_sil=2):
+    """Load neural feature data and labels from an HDF5 file.
+
+    Args:
+        data_filename: Path to the HDF5 data file.
+        pt: Patient identifier string.
+        tw_select: Two-element sequence [start, end] for the desired time
+            window in seconds.
+        tw_orig: Two-element sequence [start, end] of the original time
+            window in the data.
+        zscore: If True, load z-scored features.
+        only_train: If True, skip loading test data.
+        load_all: If True, concatenate train and test into a single
+            training set.
+        n_sil: Number of silence tokens to prepend/append to labels.
+
+    Returns:
+        tuple: (feats_train, labels_train, feats_test, labels_test).
+            Test arrays are None when only_train or load_all is True.
+    """
     feat_key_train = 'norm_rt_HG_pow_z' if zscore else 'norm_rt_HG_pow'
     feat_key_test = 'norm_rt_HG_test_pow_z' if zscore else 'norm_rt_HG_test_pow'
 
@@ -272,6 +323,25 @@ def load_data(data_filename, pt, tw_select, tw_orig, zscore=False, only_train=Fa
 def select_datamodule(cfg, X_train_tgt, y_train_tgt, X_train_cross,
                       y_train_cross, X_test, y_test, batch_size,
                       val_size, augmentations, data_dir):
+    """Instantiate the appropriate Lightning data module based on config.
+
+    Args:
+        cfg: Hydra DictConfig with pool_train, align_train, target_pt,
+            and data_proc fields.
+        X_train_tgt: Target patient training features array.
+        y_train_tgt: Target patient training labels array.
+        X_train_cross: Cross-patient training features (list or None).
+        y_train_cross: Cross-patient training labels (list or None).
+        X_test: Test features array.
+        y_test: Test labels array.
+        batch_size: Training batch size.
+        val_size: Fraction of training data for validation.
+        augmentations: List of augmentation functions.
+        data_dir: Path for caching data module state.
+
+    Returns:
+        LightningDataModule: Configured data module for CTC training.
+    """
     if cfg.pool_train:
         dm = CTCHeldOutTargetValAlignDataModule(
             X_train_tgt,
@@ -303,6 +373,22 @@ def select_datamodule(cfg, X_train_tgt, y_train_tgt, X_train_cross,
 
 
 def load_hparams(cfg, hparam_dir='~/data/results/decoding/ctc_results_tuneRndm30CV_90varNoDel_computeAlign_augs/'):
+    """Load best hyperparameters from a previous tuning run.
+
+    Falls back to defaults from the YAML config if the saved file is not
+    found.
+
+    Args:
+        cfg: Hydra DictConfig with training, model, pool_train,
+            align_train, compute_chance, and target_pt fields.
+        hparam_dir: Directory containing per-patient hyperparameter
+            HDF5 files.
+
+    Returns:
+        dict: Hyperparameter dictionary with keys batch_size,
+            learning_rate, gclip_val, hidden_size, n_layers, dropout,
+            and l2_reg.
+    """
     # get parameters from input configuration as default
     best_tune_cfg = {
         'batch_size': cfg.training.batch_size,
@@ -338,6 +424,16 @@ def load_hparams(cfg, hparam_dir='~/data/results/decoding/ctc_results_tuneRndm30
 
 
 def calc_norm_edit_distance(input_seqs, target_seqs):
+    """Compute token-level normalized edit distance via greedy CTC decoding.
+
+    Args:
+        input_seqs: Log-softmax output tensor of shape
+            (batch, time, n_classes).
+        target_seqs: Ground-truth label sequences.
+
+    Returns:
+        float: Total edit distance divided by total target tokens.
+    """
     tot_dist = 0
     n_tokens = 0
     decoded_outputs = greedy_decode_batch(input_seqs)
@@ -350,6 +446,18 @@ def calc_norm_edit_distance(input_seqs, target_seqs):
 
 
 def save_results(save_dir, cfg, pt, pers_all, logits_all, phon_dict, model_hparams):
+    """Save decoding results and model hyperparameters to an HDF5 file.
+
+    Args:
+        save_dir: Base directory for saving results.
+        cfg: Hydra DictConfig with data_proc, pool_train, align_train,
+            and compute_chance fields.
+        pt: Patient identifier string.
+        pers_all: List of phoneme error rates across iterations.
+        logits_all: List of logit arrays across iterations.
+        phon_dict: Mapping from token indices to phoneme strings.
+        model_hparams: Dictionary of model hyperparameters to store.
+    """
     save_dir = Path(save_dir)
     save_fname = f'{pt}/{pt}_ctcRNN_decodeTW([{cfg.data_proc.tw_select[0]},{cfg.data_proc.tw_select[1]}])'
     suffix = '_ptSpecific'

@@ -21,6 +21,12 @@ import collections
 NEG_INF = -float("inf")
 
 def make_new_beam():
+  """Creates a new beam defaultdict for CTC prefix search.
+
+  Returns:
+      A defaultdict where missing keys default to (NEG_INF, NEG_INF),
+      representing (log_prob_blank, log_prob_non_blank).
+  """
   fn = lambda : (NEG_INF, NEG_INF)
   return collections.defaultdict(fn)
 

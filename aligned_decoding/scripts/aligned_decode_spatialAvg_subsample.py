@@ -1,3 +1,9 @@
+"""Cross-patient aligned SVM decoding with spatial-average subsampling.
+
+Evaluates decoding performance when electrodes are grouped into spatial
+blocks and averaged, simulating larger electrode contact sizes. Supports
+optional CCA alignment and nested Bayesian hyperparameter search.
+"""
 
 import sys
 import os
@@ -28,6 +34,12 @@ from processing_utils.spatial_avg_subsampling import (spatial_avg_sig_channels,
 
 
 def init_parser():
+    """Create argument parser for spatial-average subsampled SVM decoding.
+
+    Returns:
+        argparse.ArgumentParser: Configured parser with patient, contact size,
+            alignment, and output arguments.
+    """
     parser = argparse.ArgumentParser(description='Aligned decoding SVM on DCC')
     parser.add_argument('-pt', '--patient', type=str, required=True,
                         help='Patient ID')
@@ -59,10 +71,24 @@ def init_parser():
 
 
 def str2bool(s):
+    """Convert a string to a boolean value.
+
+    Args:
+        s: String to convert (case-insensitive).
+
+    Returns:
+        bool: True if the string equals 'true' (case-insensitive).
+    """
     return s.lower() == 'true'
 
 
 def aligned_decoding():
+    """Run aligned SVM decoding with spatially-averaged electrode data.
+
+    Loads pre-computed spatially averaged data for the given contact size,
+    then evaluates SVM classification via stratified k-fold cross-validation
+    over multiple iterations. Results are saved incrementally to disk.
+    """
     parser = init_parser()
     args = parser.parse_args()
 

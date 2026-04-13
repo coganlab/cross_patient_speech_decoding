@@ -1,9 +1,27 @@
+"""Sliding-window grid subsampling of electrode arrays."""
+
 import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 
 
 def grid_subsample_sig_channels(pt, winSize, dataPath, step=(1,1)):
+    """Finds significant-channel indices within every sliding sub-grid.
+
+    For each sliding window position on the electrode grid, identifies which
+    of the sampled channels are significant and returns their local indices.
+
+    Args:
+        pt (str): Subject identifier string.
+        winSize (tuple): Window dimensions as (rows, cols).
+        dataPath (str): Root directory containing subject data folders.
+        step (tuple, optional): Step size in each dimension.
+            Defaults to (1, 1).
+
+    Returns:
+        list: List of ndarrays, each containing the indices of significant
+            channels within a particular sub-grid.
+    """
     # load in channel map
     chanMap = sio.loadmat(f'{dataPath}/{pt}/{pt}_channelMap.mat')['chanMap']
 
@@ -42,6 +60,20 @@ def grid_subsample_sig_channels(pt, winSize, dataPath, step=(1,1)):
 
     
 def grid_susbsample_idxs(gridSize, winSize, step=(1,1), start=(0,0)):
+    """Generates 2-D index arrays for all sliding window positions on a grid.
+
+    Args:
+        gridSize (tuple): Full grid dimensions as (rows, cols).
+        winSize (tuple): Window dimensions as (rows, cols).
+        step (tuple, optional): Step size in each dimension.
+            Defaults to (1, 1).
+        start (tuple, optional): Starting offset in each dimension.
+            Defaults to (0, 0).
+
+    Returns:
+        list: List of ndarrays with shape (winSize[0]*winSize[1], 2), each
+            containing the (row, col) indices for one window position.
+    """
     # starting indices to placec windows in grid
     startIdxX = np.arange(start[0], gridSize[0] - winSize[0] + 1, step[0])
     startIdxY = np.arange(start[1], gridSize[1] - winSize[1] + 1, step[1])

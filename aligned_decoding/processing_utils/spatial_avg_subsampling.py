@@ -1,3 +1,5 @@
+"""Spatial averaging of electrode channels over square contact regions."""
+
 import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
@@ -7,6 +9,23 @@ from .grid_subsampling import grid_susbsample_idxs
 
 
 def spatial_avg_sig_channels(pt, contactSize, dataPath, useSig=False):
+    """Computes spatial averaging indices, optionally filtered by significance.
+
+    Loads a channel map (and optionally significant-channel data) for the
+    given subject, then returns the grid indices for each square spatial
+    averaging region.
+
+    Args:
+        pt (str): Subject identifier string.
+        contactSize (int): Edge length of the square averaging region.
+        dataPath (str): Root directory containing subject data folders.
+        useSig (bool, optional): If True, only return index groups that
+            contain at least one significant channel. Defaults to False.
+
+    Returns:
+        list: List of ndarrays, each containing 2-D grid indices for one
+            spatial averaging region.
+    """
     # load in channel map
     chanMap = sio.loadmat(f'{dataPath}/{pt}/{pt}_channelMap.mat')['chanMap']
 
@@ -53,9 +72,17 @@ def spatial_avg_sig_channels(pt, contactSize, dataPath, useSig=False):
 
 
 def spatial_avg_data(data, avgIdxs):
-    # assuming incoming data is (trials, channels_x, channels_y, time) and 
-    # avgIdxs is a list of lists of 2d indices for channels that will be
-    # averaged together to a single channel
+    """Spatially averages electrode data over grouped channel indices.
+
+    Args:
+        data (ndarray): Neural data with shape
+            (trials, channels_x, channels_y, timepoints).
+        avgIdxs (list): List of ndarrays of 2-D grid indices; each array
+            defines a group of channels to average into one channel.
+
+    Returns:
+        ndarray: Averaged data with shape (trials, timepoints, avg_channels).
+    """
     avgData = np.zeros((data.shape[0], len(avgIdxs), data.shape[-1]))
     for i, idxs in enumerate(avgIdxs):
         avgData[:, i, :] = np.mean(data[:, idxs[:, 0], idxs[:, 1]], axis=1)
@@ -64,10 +91,19 @@ def spatial_avg_data(data, avgIdxs):
 
 
 def spatial_avg_idxs(gridSize, contactSize):
-    # contacts to average are square subsampled grids, so we re-use the grid
-    # subsampling function with the window as a square with edge length equal
-    # to the contact size and a step equal to the contact size in both
-    # dimensions so there is no overlap
+    """Generates non-overlapping square grid indices for spatial averaging.
+
+    Uses ``grid_susbsample_idxs`` with window and step both equal to
+    ``contactSize`` so regions tile without overlap, centered in the grid.
+
+    Args:
+        gridSize (tuple): Grid dimensions as (rows, cols).
+        contactSize (int): Edge length of the square averaging region.
+
+    Returns:
+        list: List of ndarrays, each containing 2-D grid indices for one
+            averaging region.
+    """
     winSize = (contactSize, contactSize)
     step = (contactSize, contactSize)
 

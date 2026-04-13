@@ -11,6 +11,33 @@ import matplotlib.pyplot as plt
 def plot_1D_lat_dyn(t, data, labels, label_names, pt_list, pc_ind=0, n_cols=2,
                     title='1D Latent Dynamics', figsize=(12, 10), reorder=None,
                     same_axes=True):
+    """Plots 1D latent dynamics (single PC) for multiple datasets.
+
+    Generates a grid of subplots showing the condition-averaged trajectory
+    of a single principal component over time for each dataset.
+
+    Args:
+        t (ndarray): Time vector for the x-axis.
+        data (list of ndarray): List of feature arrays, one per dataset,
+            each with shape (n_trials, n_timepoints, n_features).
+        labels (list of ndarray): List of label arrays, one per dataset.
+        label_names (list of str): Display names for each condition.
+        pt_list (list of str): Dataset/patient identifiers for subplot
+            titles.
+        pc_ind (int, optional): Index of the principal component to plot.
+            Defaults to 0.
+        n_cols (int, optional): Number of subplot columns. Defaults to 2.
+        title (str, optional): Figure title. Defaults to '1D Latent
+            Dynamics'.
+        figsize (tuple, optional): Figure size. Defaults to (12, 10).
+        reorder (list of int, optional): Index mapping to reorder datasets
+            in the plot grid. Defaults to None.
+        same_axes (bool, optional): If True, synchronizes y-axis limits
+            across subplots. Defaults to True.
+
+    Returns:
+        matplotlib.figure.Figure: The generated figure.
+    """
     n_plots = len(data)
     f, axs = plt.subplots(nrows=int(np.ceil(n_plots/n_cols)), ncols=n_cols,
                           figsize=figsize)
@@ -35,13 +62,11 @@ def plot_1D_lat_dyn(t, data, labels, label_names, pt_list, pc_ind=0, n_cols=2,
             min_ylim = np.min(ylims[:, 0])
             max_ylim = np.max(ylims[:, 1])
             plt.setp(ax, ylim=(min_ylim, max_ylim))
-    # plt.legend(bbox_to_anchor=(1.35, 1), loc="center right")
     handles, labels = ax.get_legend_handles_labels()
     plt.figlegend(handles, labels, loc='lower center',
                   ncol=min(10, len(label_names)))
     plt.suptitle(title)
     f.tight_layout(rect=[0, 0.03, 1, 0.95])
-    # plt.show()
 
     return f
 
@@ -49,6 +74,30 @@ def plot_1D_lat_dyn(t, data, labels, label_names, pt_list, pc_ind=0, n_cols=2,
 def plot_2D_lat_dyn(data, labels, label_names, pt_list, n_cols=2,
                     title='2D Latent Dynamics', figsize=(12, 10), reorder=None,
                     same_axes=True):
+    """Plots 2D latent dynamics (PC1 vs PC2) for multiple datasets.
+
+    Generates a grid of subplots showing condition-averaged 2D trajectories
+    with markers at the trajectory start.
+
+    Args:
+        data (list of ndarray): List of feature arrays, one per dataset,
+            each with shape (n_trials, n_timepoints, n_features).
+        labels (list of ndarray): List of label arrays, one per dataset.
+        label_names (list of str): Display names for each condition.
+        pt_list (list of str): Dataset/patient identifiers for subplot
+            titles.
+        n_cols (int, optional): Number of subplot columns. Defaults to 2.
+        title (str, optional): Figure title. Defaults to '2D Latent
+            Dynamics'.
+        figsize (tuple, optional): Figure size. Defaults to (12, 10).
+        reorder (list of int, optional): Index mapping to reorder datasets
+            in the plot grid. Defaults to None.
+        same_axes (bool, optional): If True, synchronizes axis limits
+            across subplots. Defaults to True.
+
+    Returns:
+        matplotlib.figure.Figure: The generated figure.
+    """
     n_plots = len(data)
     f, axs = plt.subplots(nrows=int(np.ceil(n_plots/n_cols)), ncols=n_cols,
                           figsize=figsize)
@@ -80,13 +129,9 @@ def plot_2D_lat_dyn(data, labels, label_names, pt_list, n_cols=2,
             min_ylim = np.min(ylims[:, 0])
             max_ylim = np.max(ylims[:, 1])
             plt.setp(ax, xlim=(min_xlim, max_xlim), ylim=(min_ylim, max_ylim))
-    # plt.legend(bbox_to_anchor=(1.35, 1), loc="center right")
     handles, labels = ax.get_legend_handles_labels()
-    # plt.figlegend(handles, labels, loc='lower center',
-    #               ncol=min(10, len(label_names)))
     plt.suptitle(title)
     f.tight_layout(rect=[0, 0.03, 1, 0.95])
-    # plt.show()
 
     return f
 
@@ -94,6 +139,30 @@ def plot_2D_lat_dyn(data, labels, label_names, pt_list, n_cols=2,
 def plot_3D_lat_dyn(data, labels, label_names, pt_list,
                     title='3D Latent Dynamics', figsize=(12, 12), alpha=0.6,
                     reorder=None, same_axes=True):
+    """Plots 3D latent dynamics (PC1-PC2-PC3) for multiple datasets.
+
+    Generates a 2x2 grid of 3D subplots showing condition trajectories
+    with markers at the trajectory start.
+
+    Args:
+        data (list of ndarray): List of feature arrays, one per dataset,
+            each with shape (n_conditions, n_timepoints, n_features).
+        labels (list of ndarray): List of label arrays, one per dataset.
+        label_names (list of str): Display names for each condition.
+        pt_list (list of str): Dataset/patient identifiers for subplot
+            titles.
+        title (str, optional): Figure title. Defaults to '3D Latent
+            Dynamics'.
+        figsize (tuple, optional): Figure size. Defaults to (12, 12).
+        alpha (float, optional): Line transparency. Defaults to 0.6.
+        reorder (list of int, optional): Index mapping to reorder datasets
+            in the plot grid. Defaults to None.
+        same_axes (bool, optional): If True, synchronizes axis limits
+            across subplots. Defaults to True.
+
+    Returns:
+        matplotlib.figure.Figure: The generated figure.
+    """
     f = plt.figure(figsize=figsize)
     sp = [221, 222, 223, 224]
     xlims = []
@@ -134,12 +203,19 @@ def plot_3D_lat_dyn(data, labels, label_names, pt_list,
 
     plt.legend(bbox_to_anchor=(1.4, 1), loc="center right")
     plt.suptitle(title)
-    # plt.show()
 
     return f
 
 
 def arrange_subplots(n):
+    """Determines a non-prime grid size for arranging n subplots.
+
+    Increments n until it is non-prime (or <= 4) so that a rectangular
+    subplot grid can be formed.
+
+    Args:
+        n (int): Desired number of subplots.
+    """
 
     while is_prime(n) and n > 4:
         n += 1

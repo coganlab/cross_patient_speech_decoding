@@ -1,3 +1,9 @@
+"""Cross-patient aligned SVM decoding with nested cross-validation.
+
+Extends aligned SVM decoding with optional Bayesian hyperparameter
+search (nested CV), MCCA alignment, surrogate data, and trial
+subsampling. Supports multiple cross-patient decoder backends.
+"""
 
 import sys
 import os
@@ -30,6 +36,12 @@ import alignment.alignment_utils as utils
 
 
 def init_parser():
+    """Create argument parser for nested-CV aligned SVM decoding.
+
+    Returns:
+        argparse.ArgumentParser: Configured parser with patient, alignment,
+            cross-validation, and output arguments.
+    """
     parser = argparse.ArgumentParser(description='Aligned decoding SVM on DCC')
     parser.add_argument('-pt', '--patient', type=str, required=True,
                         help='Patient ID')
@@ -73,10 +85,25 @@ def init_parser():
 
 
 def str2bool(s):
+    """Convert a string to a boolean value.
+
+    Args:
+        s: String to convert (case-insensitive).
+
+    Returns:
+        bool: True if the string equals 'true' (case-insensitive).
+    """
     return s.lower() == 'true'
 
 
 def aligned_decoding():
+    """Run the nested-CV aligned SVM decoding pipeline.
+
+    Parses CLI arguments, loads patient data, optionally pools cross-patient
+    data with CCA/MCCA/joint-PCA alignment, runs Bayesian or fixed
+    hyperparameter SVM decoding with stratified k-fold cross-validation,
+    and saves accuracy results to disk after each iteration.
+    """
     parser = init_parser()
     args = parser.parse_args()
 

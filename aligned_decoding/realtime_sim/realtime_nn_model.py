@@ -1,3 +1,10 @@
+"""Lightning module and building blocks for a real-time RNN speech decoder.
+
+Defines a stacked GRU encoder, a dense CTC classifier head, and a
+LightningModule that combines them for CTC-based phoneme decoding with
+sliding-window input reformatting.
+"""
+
 import torch
 from torch import nn
 from torchaudio.functional import edit_distance
@@ -13,8 +20,24 @@ BEAM_SIZE = 100
 
 
 class StackedRNN(nn.Module):
+    """Multi-layer GRU encoder.
+
+    Wraps ``nn.GRU`` for stacking multiple recurrent layers with optional
+    dropout and bidirectionality.
+    """
+
     def __init__(self, input_size, hidden_size, n_layers, dropout=0.3,
                  bidirectional=False):
+        """Initializes the stacked GRU.
+
+        Args:
+            input_size: Number of input features per time step.
+            hidden_size: Number of hidden units per GRU layer.
+            n_layers: Number of stacked GRU layers.
+            dropout: Dropout probability between layers (ignored when
+                n_layers is 1).
+            bidirectional: If True, uses a bidirectional GRU.
+        """
         super(StackedRNN, self).__init__()
         self.rnn = nn.GRU(
             input_size=input_size,
@@ -26,26 +49,76 @@ class StackedRNN(nn.Module):
         )
 
     def forward(self, x, state=None):
+        """Runs the GRU forward pass.
+
+        Args:
+            x: Input tensor of shape (B, T, input_size).
+            state: Optional initial hidden state.
+
+        Returns:
+            Tuple of (output, hidden) where output has shape
+            (B, T, hidden_size * num_directions).
+        """
         output, hidden = self.rnn(x, state)
         return output, hidden
 
 
 class DenseClassifier(nn.Module):
+    """Single linear layer that maps RNN outputs to class logits per time step."""
+
     def __init__(self, input_size, n_classes):
+        """Initializes the classifier.
+
+        Args:
+            input_size: Dimensionality of the RNN output.
+            n_classes: Number of output classes (including CTC blank).
+        """
         super(DenseClassifier, self).__init__()
         self.fc = nn.Linear(input_size, n_classes)
 
     def forward(self, x):
+        """Applies the linear projection to each time step.
+
+        Args:
+            x: Input tensor of shape (B, T, input_size).
+
+        Returns:
+            Logits tensor of shape (B, T, n_classes).
+        """
         # Apply the linear layer to each time step
         x = self.fc(x)
         return x
 
 
 class RealtimeRNNModel(L.LightningModule):
+    """CTC-based real-time RNN model for phoneme decoding.
+
+    Combines a StackedRNN encoder, a DenseClassifier head, and
+    sliding-window input reformatting. Trained with CTC loss and
+    evaluated with phoneme error rate (PER).
+    """
+
     def __init__(self, input_size, hidden_size, n_layers, n_classes,
                  dropout=0.3, win_size=14, stride=4, bidirectional=False,
                  learning_rate=1e-3, decay_steps=100, weight_decay=1e-5,
                  blank=0):
+        """Initializes the model.
+
+        Args:
+            input_size: Number of input features per time step.
+            hidden_size: GRU hidden-state dimensionality.
+            n_layers: Number of stacked GRU layers.
+            n_classes: Number of output classes (including CTC blank).
+            dropout: Dropout probability for the GRU.
+            win_size: Sliding-window width in time steps.
+            stride: Sliding-window stride in time steps.
+            bidirectional: If True, uses a bidirectional GRU.
+            learning_rate: Initial learning rate for AdamW.
+            decay_steps: Number of epochs over which the learning rate
+                linearly decays to zero.
+            weight_decay: L2 regularization strength for AdamW.
+            blank: Index of the CTC blank label.
+        """
         super(RealtimeRNNModel, self).__init__()
         self.save_hyperparameters()
 
@@ -78,6 +151,14 @@ class RealtimeRNNModel(L.LightningModule):
 
 
     def forward(self, x):
+        """Runs the full forward pass: window reformatting, RNN, classifier.
+
+        Args:
+            x: Input tensor of shape (B, T, C).
+
+        Returns:
+            Logits tensor of shape (B, n_windows, n_classes).
+        """
         # x: (B, T, C)
         x = self.reformat_time_windows(x)
 
@@ -118,6 +199,15 @@ class RealtimeRNNModel(L.LightningModule):
         return x
 
     def training_step(self, batch, batch_idx):
+        """Computes and logs CTC training loss for a single batch.
+
+        Args:
+            batch: Tuple of (inputs, targets, input_lengths, target_lengths).
+            batch_idx: Index of the current batch.
+
+        Returns:
+            Scalar CTC loss.
+        """
         inputs, targets, input_lengths, target_lengths = batch
 
         # account for sliding window adjustment in input lengths
@@ -139,6 +229,15 @@ class RealtimeRNNModel(L.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
+        """Computes CTC loss and phoneme error rate for a validation batch.
+
+        Args:
+            batch: Tuple of (inputs, targets, input_lengths, target_lengths).
+            batch_idx: Index of the current batch.
+
+        Returns:
+            Scalar CTC loss.
+        """
         inputs, targets, input_lengths, target_lengths = batch
 
         # account for sliding window adjustment in input lengths
@@ -169,6 +268,15 @@ class RealtimeRNNModel(L.LightningModule):
         return loss
 
     def test_step(self, batch, batch_idx):
+        """Computes and logs CTC loss for a test batch.
+
+        Args:
+            batch: Tuple of (inputs, targets, input_lengths, target_lengths).
+            batch_idx: Index of the current batch.
+
+        Returns:
+            Scalar CTC loss.
+        """
         inputs, targets, input_lengths, target_lengths = batch
         outputs = self(inputs)
         outputs = outputs.log_softmax(2).permute(1, 0, 2)
@@ -177,6 +285,11 @@ class RealtimeRNNModel(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
+        """Configures AdamW optimizer with linear learning-rate decay.
+
+        Returns:
+            Tuple of ([optimizer], [scheduler]).
+        """
         hps = self.hparams
         optimizer = torch.optim.AdamW(self.parameters(), lr=hps.learning_rate,
                                       weight_decay=hps.weight_decay)
@@ -192,6 +305,16 @@ class RealtimeRNNModel(L.LightningModule):
 
 
 def calc_PER(decoded, targets, target_lengths):
+    """Computes the phoneme error rate (PER) for a batch.
+
+    Args:
+        decoded: List of 1-D LongTensors of decoded label sequences.
+        targets: Ground-truth label tensor of shape (B, L).
+        target_lengths: 1-D tensor of true target sequence lengths.
+
+    Returns:
+        PER as a percentage (0-100).
+    """
     edit_dist = sum(
         edit_distance(pred, tgt[:l])
         for pred, tgt, l in zip(decoded, targets, target_lengths)

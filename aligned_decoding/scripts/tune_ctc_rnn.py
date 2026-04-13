@@ -1,3 +1,11 @@
+"""Hyperparameter tuning for CTC-RNN speech decoding models.
+
+Uses Ray Tune with random search or BOHB to optimize RNN hyperparameters
+for CTC-based phoneme sequence decoding. After tuning, retrains the best
+configuration over multiple iterations and evaluates phoneme error rate
+on held-out test data.
+"""
+
 import numpy as np
 import h5py
 import torch
@@ -62,6 +70,19 @@ AUGS_DICT = {
 
 @hydra.main(version_base=None, config_path="config", config_name="tune_ctc_rnn_config")
 def main(cfg: DictConfig) -> None:
+    """Entry point for CTC-RNN hyperparameter tuning and retraining.
+
+    Loads patient data, applies PCA/CCA projections for cross-patient
+    pooling, runs Ray Tune hyperparameter optimization, retrains the
+    best configuration over multiple iterations, and saves results.
+
+    Args:
+        cfg: Hydra DictConfig with paths, data processing, model,
+            training, and tuning parameters.
+
+    Raises:
+        RuntimeError: If required configuration keys are missing.
+    """
     # Check for missing keys in config
     missing_keys = OmegaConf.missing_keys(cfg)
     if missing_keys:
@@ -379,13 +400,36 @@ def main(cfg: DictConfig) -> None:
 
 
 class TuneReportBestMetricCallback(L.Callback):
+    """Lightning callback that reports the best metric value to Ray Tune.
+
+    Tracks the running best of a monitored metric and reports it to
+    Ray Tune after each validation epoch for early stopping decisions.
+
+    Attributes:
+        metric: Name of the metric to monitor.
+        mode: One of 'min' or 'max'.
+        best: Current best metric value observed.
+    """
+
     def __init__(self, metric="val_PER", mode="min"):
+        """Initialize the callback.
+
+        Args:
+            metric: Name of the metric to track.
+            mode: 'min' to track the lowest value, 'max' for highest.
+        """
         super().__init__()
         self.metric = metric
         self.mode = mode
         self.best = float("inf") if mode == "min" else -float("inf")
 
     def on_validation_end(self, trainer, pl_module):
+        """Update best metric and report to Ray Tune.
+
+        Args:
+            trainer: Lightning Trainer instance.
+            pl_module: Lightning module being trained.
+        """
         metrics = trainer.callback_metrics
         if self.metric not in metrics:
             return
@@ -398,12 +442,35 @@ class TuneReportBestMetricCallback(L.Callback):
         tune.report({self.metric: self.best})
 
 class BestMetricCallback(L.Callback):
+    """Lightning callback that tracks the best metric value locally.
+
+    Used during cross-validation folds to record the best validation
+    metric without reporting to Ray Tune.
+
+    Attributes:
+        metric: Name of the metric to monitor.
+        mode: One of 'min' or 'max'.
+        best: Current best metric value observed.
+    """
+
     def __init__(self, metric="val_PER", mode="min"):
+        """Initialize the callback.
+
+        Args:
+            metric: Name of the metric to track.
+            mode: 'min' to track the lowest value, 'max' for highest.
+        """
         self.metric = metric
         self.mode = mode
         self.best = float("inf") if mode == "min" else -float("inf")
 
     def on_validation_end(self, trainer, pl_module):
+        """Update the best metric value if improved.
+
+        Args:
+            trainer: Lightning Trainer instance.
+            pl_module: Lightning module being trained.
+        """
         metrics = trainer.callback_metrics
         if self.metric not in metrics:
             return
@@ -415,6 +482,21 @@ class BestMetricCallback(L.Callback):
 
 
 def train_func(hp_config, cfg=None, X_train_tgt=None, y_train_tgt=None, X_train_cross=None, y_train_cross=None, X_test=None, y_test=None):
+    """Ray Tune trainable for a single hyperparameter trial.
+
+    Builds a data module, trains the CTC-RNN model for the configured
+    number of epochs, and reports the best validation PER to Ray Tune.
+
+    Args:
+        hp_config: Dictionary of hyperparameters from the search space.
+        cfg: Hydra DictConfig with model and training settings.
+        X_train_tgt: Target patient training features.
+        y_train_tgt: Target patient training labels.
+        X_train_cross: Cross-patient training features (or None).
+        y_train_cross: Cross-patient training labels (or None).
+        X_test: Test features array.
+        y_test: Test labels array.
+    """
     # Setup data module
     trial_dir = Path(tune.get_context().get_trial_dir())
     dm_path = trial_dir
@@ -466,6 +548,21 @@ def train_func(hp_config, cfg=None, X_train_tgt=None, y_train_tgt=None, X_train_
 
 
 def train_func_cv(hp_config, cfg=None, X_train_tgt=None, y_train_tgt=None, X_train_cross=None, y_train_cross=None, X_test=None, y_test=None):
+    """Ray Tune trainable with cross-validated evaluation.
+
+    Trains the CTC-RNN model across multiple folds, aggregates the best
+    validation PER per fold, and reports the mean to Ray Tune.
+
+    Args:
+        hp_config: Dictionary of hyperparameters from the search space.
+        cfg: Hydra DictConfig with model, training, and tuning settings.
+        X_train_tgt: Target patient training features.
+        y_train_tgt: Target patient training labels.
+        X_train_cross: Cross-patient training features (or None).
+        y_train_cross: Cross-patient training labels (or None).
+        X_test: Test features array.
+        y_test: Test labels array.
+    """
 
     trial_dir = Path(tune.get_context().get_trial_dir())
     dm_path = trial_dir
@@ -539,6 +636,26 @@ def train_func_cv(hp_config, cfg=None, X_train_tgt=None, y_train_tgt=None, X_tra
     
 
 def tune_func(search_space, cfg, X_train_tgt, y_train_tgt, X_train_cross, y_train_cross, X_test, y_test, algo='random', cv=False):
+    """Launch Ray Tune hyperparameter optimization.
+
+    Args:
+        search_space: Ray Tune or ConfigSpace search space definition.
+        cfg: Hydra DictConfig with training and tuning parameters.
+        X_train_tgt: Target patient training features.
+        y_train_tgt: Target patient training labels.
+        X_train_cross: Cross-patient training features (or None).
+        y_train_cross: Cross-patient training labels (or None).
+        X_test: Test features array.
+        y_test: Test labels array.
+        algo: Tuning algorithm, either 'random' or 'bohb'.
+        cv: If True, use cross-validated training function.
+
+    Returns:
+        ray.tune.ResultGrid: Results from the tuning run.
+
+    Raises:
+        ValueError: If an unknown tuning algorithm is specified.
+    """
     if cv:
         train_fn = train_func_cv
     else:
@@ -568,6 +685,16 @@ def tune_func(search_space, cfg, X_train_tgt, y_train_tgt, X_train_cross, y_trai
     return tuner.fit()
 
 def create_rndm_tuner(search_space, cfg, trainable):
+    """Create a Ray Tune Tuner with random search.
+
+    Args:
+        search_space: Dictionary defining the hyperparameter search space.
+        cfg: Hydra DictConfig with tuning.n_trials.
+        trainable: Ray Tune trainable (with resources and parameters).
+
+    Returns:
+        tune.Tuner: Configured tuner for random search.
+    """
     # scheduler = ASHAScheduler(max_t=cfg.training.n_epochs,
     #                           grace_period=cfg.tuning.burn_in,
     #                           reduction_factor=2,
@@ -595,6 +722,17 @@ def create_rndm_tuner(search_space, cfg, trainable):
     
 
 def create_bohb_tuner(search_space, cfg, trainable):
+    """Create a Ray Tune Tuner with BOHB (Bayesian Optimization HyperBand).
+
+    Args:
+        search_space: ConfigurationSpace defining the search space.
+        cfg: Hydra DictConfig with tuning.n_trials and
+            training.n_epochs.
+        trainable: Ray Tune trainable (with resources and parameters).
+
+    Returns:
+        tune.Tuner: Configured tuner for BOHB search.
+    """
     scheduler = HyperBandForBOHB(
         max_t=cfg.training.n_epochs,
     )
@@ -637,6 +775,26 @@ def run_single_iteration(
     X_test,
     y_test,
 ):
+    """Ray remote task that trains and evaluates a single iteration.
+
+    Builds its own DataModule, trains the model with the best
+    hyperparameters, evaluates on test data, and saves the result
+    checkpoint to disk.
+
+    Args:
+        iter_idx: Iteration index for file naming.
+        cfg: Hydra DictConfig with model, training, and path settings.
+        best_tune_cfg: Dictionary of best hyperparameters from tuning.
+        X_train_tgt: Target patient training features.
+        y_train_tgt: Target patient training labels.
+        X_train_cross: Cross-patient training features (or None).
+        y_train_cross: Cross-patient training labels (or None).
+        X_test: Test features array.
+        y_test: Test labels array.
+
+    Returns:
+        dict: Result with keys 'iter', 'per', 'logits', 'hparams'.
+    """
     # IMPORTANT: each worker must build its own DataModule
     dm = select_datamodule(
         cfg,
@@ -716,6 +874,17 @@ def run_single_iteration(
 
 
 def make_logger(log_dir, pt, cfg):
+    """Create a TensorBoard logger with a context-aware experiment name.
+
+    Args:
+        log_dir: Directory for TensorBoard log files.
+        pt: Patient identifier string.
+        cfg: Hydra DictConfig with pool_train, align_train, and
+            compute_chance flags.
+
+    Returns:
+        TensorBoardLogger: Configured logger instance.
+    """
     log_str = f'{pt}'
     suffix = '_ptSpecific'
     if cfg.pool_train:
@@ -734,6 +903,16 @@ def make_logger(log_dir, pt, cfg):
 
 
 def get_completed_iters(base_dir, n_iter):
+    """Find which training iterations have already been completed.
+
+    Args:
+        base_dir: Path to the base directory containing iteration
+            subdirectories.
+        n_iter: Total number of expected iterations.
+
+    Returns:
+        set[int]: Indices of iterations with saved result files.
+    """
     completed = set()
     for i in range(n_iter):
         result_file = base_dir / f"iter_{i}" / "result.pt"
@@ -743,6 +922,25 @@ def get_completed_iters(base_dir, n_iter):
 
 
 def load_data(data_filename, pt, tw_select, tw_orig, zscore=False, only_train=False, load_all=False, n_sil=2):
+    """Load neural feature data and labels from an HDF5 file.
+
+    Args:
+        data_filename: Path to the HDF5 data file.
+        pt: Patient identifier string.
+        tw_select: Two-element sequence [start, end] for the desired time
+            window in seconds.
+        tw_orig: Two-element sequence [start, end] of the original time
+            window in the data.
+        zscore: If True, load z-scored features.
+        only_train: If True, skip loading test data.
+        load_all: If True, concatenate train and test into a single
+            training set.
+        n_sil: Number of silence tokens to prepend/append to labels.
+
+    Returns:
+        tuple: (feats_train, labels_train, feats_test, labels_test).
+            Test arrays are None when only_train or load_all is True.
+    """
     feat_key_train = 'norm_rt_HG_pow_z' if zscore else 'norm_rt_HG_pow'
     feat_key_test = 'norm_rt_HG_test_pow_z' if zscore else 'norm_rt_HG_test_pow'
 
@@ -783,6 +981,17 @@ def load_data(data_filename, pt, tw_select, tw_orig, zscore=False, only_train=Fa
 
 
 def make_chance_labels(n_trials, seq_length, n_phonemes=9, n_sil=2):
+    """Generate random phoneme label sequences for chance-level evaluation.
+
+    Args:
+        n_trials: Number of trials to generate.
+        seq_length: Total sequence length including silence tokens.
+        n_phonemes: Number of distinct phoneme classes (excluding silence).
+        n_sil: Number of silence tokens to prepend/append.
+
+    Returns:
+        np.ndarray: Random label array of shape (n_trials, seq_length).
+    """
     labels = np.random.randint(1, n_phonemes + 1, size=(n_trials, seq_length - 2 * n_sil))
     for _ in range(n_sil):
         labels = np.insert(labels, 0, SIL_TOKEN, axis=1)
@@ -793,6 +1002,24 @@ def make_chance_labels(n_trials, seq_length, n_phonemes=9, n_sil=2):
 def select_datamodule(cfg, X_train_tgt, y_train_tgt, X_train_cross,
                       y_train_cross, X_test, y_test, batch_size,
                       val_size, augmentations, data_dir):
+    """Instantiate the appropriate Lightning data module based on config.
+
+    Args:
+        cfg: Hydra DictConfig with pool_train and target_pt fields.
+        X_train_tgt: Target patient training features array.
+        y_train_tgt: Target patient training labels array.
+        X_train_cross: Cross-patient training features (or None).
+        y_train_cross: Cross-patient training labels (or None).
+        X_test: Test features array.
+        y_test: Test labels array.
+        batch_size: Training batch size.
+        val_size: Fraction of training data for validation.
+        augmentations: List of augmentation functions.
+        data_dir: Path for caching data module state.
+
+    Returns:
+        LightningDataModule: Configured data module for CTC training.
+    """
     if cfg.pool_train:
         dm = CTCHeldOutTargetValDataModule(
             X_train_tgt,
@@ -821,6 +1048,15 @@ def select_datamodule(cfg, X_train_tgt, y_train_tgt, X_train_cross,
 
 
 def load_pca_xform(pca_path, pt):
+    """Load PCA projection matrix for a patient from an HDF5 file.
+
+    Args:
+        pca_path: Path to the HDF5 file containing PCA components.
+        pt: Patient identifier string.
+
+    Returns:
+        np.ndarray: Transposed PCA components for projecting to latent space.
+    """
     with h5py.File(pca_path, 'r') as f:
         # load PCA components - transpose for projection to latent space
         pca_xform = f[f'{pt}/components'][:].T
@@ -828,12 +1064,32 @@ def load_pca_xform(pca_path, pt):
 
 
 def load_cca_xform(cca_path, target_pt, source_pt):
+    """Load CCA alignment matrix from source to target patient space.
+
+    Args:
+        cca_path: Path to the HDF5 file containing CCA components.
+        target_pt: Target patient identifier string.
+        source_pt: Source patient identifier string.
+
+    Returns:
+        np.ndarray: CCA transformation matrix.
+    """
     with h5py.File(cca_path, 'r') as f:
         cca_xform = f[f'{source_pt}_to_{target_pt}/components'][:]
     return cca_xform
 
 
 def calc_norm_edit_distance(input_seqs, target_seqs):
+    """Compute token-level normalized edit distance via greedy CTC decoding.
+
+    Args:
+        input_seqs: Log-softmax output tensor of shape
+            (batch, time, n_classes).
+        target_seqs: Ground-truth label sequences.
+
+    Returns:
+        float: Total edit distance divided by total target tokens.
+    """
     tot_dist = 0
     n_tokens = 0
     decoded_outputs = greedy_decode_batch(input_seqs)
@@ -846,6 +1102,18 @@ def calc_norm_edit_distance(input_seqs, target_seqs):
 
 
 def save_results(save_dir, cfg, pt, pers_all, logits_all, phon_dict, model_hparams):
+    """Save decoding results and model hyperparameters to an HDF5 file.
+
+    Args:
+        save_dir: Base directory for saving results.
+        cfg: Hydra DictConfig with data_proc, pool_train, align_train,
+            and compute_chance fields.
+        pt: Patient identifier string.
+        pers_all: List of phoneme error rates across iterations.
+        logits_all: List of logit arrays across iterations.
+        phon_dict: Mapping from token indices to phoneme strings.
+        model_hparams: Dictionary of model hyperparameters to store.
+    """
     save_dir = Path(save_dir)
     save_fname = f'{pt}/{pt}_ctcRNN_decodeTW([{cfg.data_proc.tw_select[0]},{cfg.data_proc.tw_select[1]}])'
     suffix = '_ptSpecific'

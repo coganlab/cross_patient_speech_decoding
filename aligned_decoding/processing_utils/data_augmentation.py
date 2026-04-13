@@ -128,12 +128,36 @@ def mixup_data(x1, x2, prior1, prior2, y1, y2, alpha=1):
 
 
 def extract_tw(data, time_axis, t_range, win_range, fs):
+    """Extracts a time window from data along the specified axis.
+
+    Args:
+        data (ndarray): Input data array.
+        time_axis (int): Axis corresponding to the time dimension.
+        t_range (array-like): Full time range of the data as [start, end]
+            in seconds.
+        win_range (array-like): Desired window as [start, end] in seconds.
+        fs (int): Sampling rate in Hz.
+
+    Returns:
+        ndarray: Sliced data containing only the requested time window.
+    """
     tw_inds = get_tw_inds(t_range, win_range, fs)
     tw_inds = correct_tw_inds(tw_inds, win_range, fs)
     return data.take(tw_inds, axis=time_axis)
 
 
 def correct_tw_inds(inds, win_range, fs):
+    """Pads or trims index array to match the expected window length.
+
+    Args:
+        inds (ndarray): Array of time-sample indices.
+        win_range (array-like): Desired window as [start, end] in seconds.
+        fs (int): Sampling rate in Hz.
+
+    Returns:
+        ndarray: Index array adjusted to have exactly
+            ``int((win_range[1] - win_range[0]) * fs)`` elements.
+    """
     n_win = int((win_range[1] - win_range[0]) * fs)
     n_inds = len(inds)
     if n_inds < n_win:
@@ -147,12 +171,31 @@ def correct_tw_inds(inds, win_range, fs):
 
 
 def get_tw_inds(t_range, win_range, fs):
+    """Computes sample indices corresponding to a time window.
+
+    Args:
+        t_range (array-like): Full time range as [start, end] in seconds.
+        win_range (array-like): Desired window as [start, end] in seconds.
+        fs (int): Sampling rate in Hz.
+
+    Returns:
+        ndarray: 1-D array of integer indices into the full time range that
+            fall within ``win_range``.
+    """
     t = np.linspace(t_range[0], t_range[1],
                     int((t_range[1] - t_range[0]) * fs))
     return np.where((t >= win_range[0]) & (t <= win_range[1]))[0]
 
 
 def trial_order_generator(inds):
+    """Yields all pairwise combinations of trial indices.
+
+    Args:
+        inds (ndarray): Array of trial indices.
+
+    Yields:
+        ndarray: A pair of trial indices from ``inds``.
+    """
     combs = numpy_combinations(inds)
     for comb in combs:
         yield comb

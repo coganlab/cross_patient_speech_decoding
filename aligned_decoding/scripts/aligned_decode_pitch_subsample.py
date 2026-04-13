@@ -1,3 +1,10 @@
+"""Cross-patient aligned SVM decoding with Poisson-disk pitch subsampling.
+
+Evaluates decoding performance when electrodes are subsampled using
+Poisson-disk sampling at a specified pitch, simulating lower-density
+electrode arrays. Supports optional CCA alignment and nested Bayesian
+hyperparameter search.
+"""
 
 import sys
 import os
@@ -27,6 +34,12 @@ from processing_utils.poisson_disk_sampling import pitch_subsample_sig_channels
 
 
 def init_parser():
+    """Create argument parser for pitch-subsampled aligned SVM decoding.
+
+    Returns:
+        argparse.ArgumentParser: Configured parser with patient, pitch,
+            alignment, and output arguments.
+    """
     parser = argparse.ArgumentParser(description='Aligned decoding SVM on DCC')
     parser.add_argument('-pt', '--patient', type=str, required=True,
                         help='Patient ID')
@@ -58,10 +71,25 @@ def init_parser():
 
 
 def str2bool(s):
+    """Convert a string to a boolean value.
+
+    Args:
+        s: String to convert (case-insensitive).
+
+    Returns:
+        bool: True if the string equals 'true' (case-insensitive).
+    """
     return s.lower() == 'true'
 
 
 def aligned_decoding():
+    """Run aligned SVM decoding with Poisson-disk pitch electrode subsampling.
+
+    For each iteration, applies Poisson-disk subsampling at the specified
+    pitch to both target and cross-patient electrodes, then evaluates SVM
+    classification via stratified k-fold cross-validation. Results are
+    saved incrementally to disk.
+    """
     parser = init_parser()
     args = parser.parse_args()
 

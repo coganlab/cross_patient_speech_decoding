@@ -11,6 +11,18 @@ from .alignment_utils import extract_group_conditions
 
 
 class JointPCA:
+    """Joint PCA alignment of multiple neural datasets to a shared latent space.
+
+    Computes a shared low-dimensional space via PCA on concatenated
+    condition-averaged data, then derives per-source transformation matrices
+    to project individual-source data into that space.
+
+    Attributes:
+        n_components (int): Dimensionality of the shared latent space.
+        dim_red (Callable): Dimensionality reduction class (sklearn-style).
+        transforms (list of ndarray): Per-source transformation matrices
+            (set after fit).
+    """
 
     def __init__(self, n_components=40, dim_red=PCA):
         """Initializes JointPCADecomp class with the number of latent
