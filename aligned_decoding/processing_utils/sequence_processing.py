@@ -104,6 +104,16 @@ def DEPone_hot_decode_batch(encoded_batch):
 
 
 def one_hot_decode_batch(encoded_batch):
+    """Decodes a batch of one-hot encoded sequences into a flat 1-D array.
+
+    Args:
+        encoded_batch (ndarray): Batch of one-hot encoded sequences with shape
+            (n_trials, sequence_length, n_classes).
+
+    Returns:
+        ndarray: 1-D array of decoded integer labels with length
+            ``n_trials * sequence_length``.
+    """
     return np.ravel(np.argmax(encoded_batch, axis=-1))
     # return tf.reshape(tf.math.argmax(encoded_batch, -1), [-1])
 
@@ -182,6 +192,23 @@ def DEPseq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output,
 
 
 def seq2seq_predict_batch(inf_enc, inf_dec, source, n_steps, n_output):
+    """Predicts output sequences for a batch using inference encoder/decoder.
+
+    Runs the full batch through the encoder in one call, then autoregressively
+    decodes each time step.
+
+    Args:
+        inf_enc (Functional): Inference encoder model.
+        inf_dec (Functional): Inference decoder model.
+        source (ndarray): Batch of feature data with shape
+            (batch_size, timesteps, features).
+        n_steps (int): Length of the output sequence to predict.
+        n_output (int): Number of output classes.
+
+    Returns:
+        tf.Variable: Predicted output probabilities with shape
+            (batch_size, n_steps, n_output).
+    """
     batch_states = inf_enc.predict_on_batch(source)
     if isinstance(batch_states, list):  # lstm tensor conversion
         batch_states = [tf.convert_to_tensor(s) for s in batch_states]

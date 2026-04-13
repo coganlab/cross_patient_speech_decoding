@@ -1,3 +1,9 @@
+"""Cross-patient aligned SVM decoding with grid-based electrode subsampling.
+
+Evaluates decoding performance when electrodes are subsampled using a
+sliding grid window, simulating lower-density electrode arrays. Supports
+optional CCA alignment and nested Bayesian hyperparameter search.
+"""
 
 import sys
 import os
@@ -27,6 +33,12 @@ from processing_utils.grid_subsampling import grid_subsample_sig_channels
 
 
 def init_parser():
+    """Create argument parser for grid-subsampled aligned SVM decoding.
+
+    Returns:
+        argparse.ArgumentParser: Configured parser with patient, grid window,
+            alignment, and output arguments.
+    """
     parser = argparse.ArgumentParser(description='Aligned decoding SVM on DCC')
     parser.add_argument('-pt', '--patient', type=str, required=True,
                         help='Patient ID')
@@ -58,10 +70,25 @@ def init_parser():
 
 
 def str2bool(s):
+    """Convert a string to a boolean value.
+
+    Args:
+        s: String to convert (case-insensitive).
+
+    Returns:
+        bool: True if the string equals 'true' (case-insensitive).
+    """
     return s.lower() == 'true'
 
 
 def aligned_decoding():
+    """Run aligned SVM decoding with grid-based electrode subsampling.
+
+    Iterates over all possible grid subsample positions for the target
+    patient, applies random grid subsamples to cross-patient data, and
+    evaluates SVM classification via stratified k-fold cross-validation.
+    Results are saved incrementally to disk.
+    """
     parser = init_parser()
     args = parser.parse_args()
 

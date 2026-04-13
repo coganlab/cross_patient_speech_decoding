@@ -1,3 +1,9 @@
+"""Cross-patient aligned speech decoding using SVM classifiers.
+
+Runs phoneme or articulator classification on neural data with optional
+cross-patient pooling, CCA alignment, and joint dimensionality reduction.
+Results are saved as pickled accuracy data.
+"""
 
 import sys
 import os
@@ -17,6 +23,12 @@ import alignment.utils as utils
 
 
 def init_parser():
+    """Create argument parser for aligned SVM decoding experiments.
+
+    Returns:
+        argparse.ArgumentParser: Configured parser with patient, experiment,
+            and output arguments.
+    """
     parser = argparse.ArgumentParser(description='Aligned decoding SVM on DCC')
     parser.add_argument('-pt', '--patient', type=str, required=True,
                         help='Patient ID')
@@ -48,10 +60,25 @@ def init_parser():
 
 
 def str2bool(s):
+    """Convert a string to a boolean value.
+
+    Args:
+        s: String to convert (case-insensitive).
+
+    Returns:
+        bool: True if the string equals 'true' (case-insensitive).
+    """
     return s.lower() == 'true'
 
 
 def aligned_decoding():
+    """Run the aligned SVM decoding pipeline.
+
+    Parses CLI arguments, loads patient neural data, applies optional
+    cross-patient pooling with CCA alignment or joint PCA, trains a
+    bagging SVM classifier via stratified k-fold cross-validation over
+    multiple iterations, and saves accuracy results to disk.
+    """
     parser = init_parser()
     args = parser.parse_args()
 

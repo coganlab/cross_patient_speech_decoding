@@ -1,9 +1,27 @@
+"""Poisson disk sampling for spatially uniform electrode subsampling."""
+
 import numpy as np
 import scipy.io as sio
 import matplotlib.pyplot as plt
 import time
 
+
 def pitch_subsample_sig_channels(pt, pitch, data_path):
+    """Subsamples electrodes at a given pitch and returns significant indices.
+
+    Uses Poisson disk sampling to select electrodes at the specified pitch
+    (inter-electrode spacing in mm), then identifies which of the sampled
+    electrodes are significant.  Recursively retries if no significant
+    channels are sampled.
+
+    Args:
+        pt (str): Subject identifier string.
+        pitch (float): Desired inter-electrode pitch in millimeters.
+        data_path (str): Root directory containing subject data folders.
+
+    Returns:
+        ndarray: Indices of significant channels within the subsampled set.
+    """
     # load in channel map
     chanMap = sio.loadmat(f'{data_path}/{pt}/{pt}_channelMap.mat')['chanMap']
 
@@ -41,7 +59,8 @@ def pitch_subsample_sig_channels(pt, pitch, data_path):
         elecIdx = np.round(elecIdx).astype(int) - 1
 
         # convert 2D coordinates to channel numbers
-        elecPt = chanMap[elecIdx[:, 0], elecIdx[:, 1]].astype(int)
+        elecPt = chanMap[elecIdx[:, 0], elecIdx[:, 1]]
+        elecPt = np.nan_to_num(elecPt, nan=-1).astype(int)
 
         # check if we need to sample more electrodes
         if elecPt.shape[0] < nElec and spacing == 1:
@@ -158,6 +177,20 @@ def poisson_disk_sampling(domain, spacing, nPoints, threshold=60,
                                           
 
 def min_neighbor_distance(pts, newPts):
+    """Computes the distance from each new point to its nearest neighbor.
+
+    Because ``newPts`` is a subset of ``pts``, the true nearest neighbor is
+    the second closest point (the first is the point itself).
+
+    Args:
+        pts (ndarray): All existing points with shape (n, ndim).
+        newPts (ndarray): Query points with shape (m, ndim), must be a
+            subset of ``pts``.
+
+    Returns:
+        ndarray: Array of length m with the nearest-neighbor distance for
+            each query point.
+    """
     # find distances to nearest neighbors
     _, D = knn_search(pts, newPts, 2)
     # since pts and newPts will include the same points, nearest neighbor
@@ -167,6 +200,18 @@ def min_neighbor_distance(pts, newPts):
 
 
 def knn_search(pts, newPts, k):
+    """Brute-force k-nearest-neighbor search.
+
+    Args:
+        pts (ndarray): Reference points with shape (n, ndim).
+        newPts (ndarray): Query points with shape (m, ndim).
+        k (int): Number of nearest neighbors to return.
+
+    Returns:
+        tuple: (I, D) where I is an (m, k) integer array of neighbor indices
+            into ``pts`` and D is an (m, k) float array of corresponding
+            Euclidean distances, both sorted by ascending distance.
+    """
     m = newPts.shape[0]
     D = np.zeros((m, k))
     I = np.zeros((m, k), dtype=int)
@@ -183,16 +228,6 @@ if __name__ == '__main__':
     gridY = 16
 
     for nElec in [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 100]:
-    # for pitch in [10, 5, 3, 2, 1.5]:
-
-        # sig, all, extra = subsample_sig_channels('S14', pitch, '../data')
-        # grid = np.zeros((gridX, gridY))
-        # grid[all[:, 0], all[:, 1]] = 1
-        # if extra.shape[0] > 0:
-        #     grid[extra[:, 0], extra[:, 1]] = 2
-    
-        # plt.imshow(grid.T, cmap='gray', origin='lower')
-        # plt.show()
     
         print('### Sampling for nElec =', nElec, '###')
         # nElec = 

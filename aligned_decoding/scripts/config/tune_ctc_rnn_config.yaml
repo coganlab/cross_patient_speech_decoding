@@ -1,0 +1,78 @@
+### Main script parameters ###
+target_pt: ???
+train_pts:
+  - S14
+  - S22
+  - S23
+  - S26
+  - S33
+  - S39
+  - S58
+  - S62
+
+align_pt: ${target_pt}  # default is to align patients to current target patient
+# align_pt: S14
+pool_train: false
+align_train: false
+compute_chance: false
+
+### Path information parameters ###
+paths:
+  data_dir: '~/data/ctc_data/'
+  data_fname: 'ctc_data_stim_impute.h5'
+  results_dir: '~/workspace/ctc_results_tuneRndm30CV_90varNoDel_computeAlign_augs/'
+  nn_data_dir: '~/workspace/ctcRNN_runs/datamodules'
+  nn_log_dir: '~/workspace/ctcRNN_runs/logs'
+  # commented PCA/CCA paths out below after changing to on-the-fly alignment
+  # pca_path: '~/data/ctc_data/pt_pcas_30comp.h5'
+  # cca_path: '~/data/ctc_data/pt_ccas_30comp.h5'
+  # pca_path: '~/data/ctc_data/pt_pcas_30comp_tw([0.5,1.5]).h5'
+  # cca_path: '~/data/ctc_data/pt_ccas_30comp_tw([0.5,1.5]).h5'
+  # pca_path: '~/data/ctc_data/pt_pcas_90var.h5'
+  # cca_path: '~/data/ctc_data/pt_ccas_90var.h5'
+  # pca_path: '~/data/ctc_data/pt_pcas_90var_z.h5'
+  # cca_path: '~/data/ctc_data/pt_ccas_90var_z.h5'
+
+### Data processing parameters ###
+data_proc:
+  tw_select:
+    - 0.5
+    - 3.5
+  tw_orig:
+    - 0
+    - 4
+  # zscore: true
+  zscore: false
+  n_components: 0.9 # for alignment calc in datamodule, irrelevant for precompuuted PCAs/CCAs
+
+### Hyperparameter tuning parameters ###
+tuning:
+  algo: 'random'  # 'random' or 'bohb'
+  n_trials: 30
+  do_cv: true
+  n_folds: 5
+
+### Training parameters ###
+training:
+  n_iter: 50
+  batch_size: 64
+  n_epochs: 300
+  learning_rate: 1e-3
+  gclip_val: 5.0
+  val_size: 0.2
+  augmentations:
+    - time_warping
+    - time_masking
+    - time_shifting
+    - noise_jitter
+    - scaling
+  # augmentations: []
+    
+### Model (hyper)parameters ###
+model:
+  hidden_size: 128
+  n_layers: 2
+  dropout: 0.3
+  win_size: 14
+  stride: 4
+  l2_reg: 1e-4

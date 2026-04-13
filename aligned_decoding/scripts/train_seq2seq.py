@@ -1,3 +1,10 @@
+"""Training script for sequence-to-sequence RNN speech decoding.
+
+Trains a Seq2Seq GRU/LSTM model for phoneme sequence decoding from
+micro-electrode neural recordings. Supports patient-specific and
+cross-patient pooled training with CCA alignment.
+"""
+
 import lightning as L
 from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint, LearningRateMonitor
 from pytorch_lightning.utilities.model_summary import summarize
@@ -16,6 +23,12 @@ from nn_models.models import Seq2SeqRNN
 import csv
 
 def init_parser():
+    """Create argument parser for Seq2Seq RNN training.
+
+    Returns:
+        argparse.ArgumentParser: Configured parser with patient and pooling
+            arguments.
+    """
     parser = argparse.ArgumentParser(description='Seq2seq on DCC')
     parser.add_argument('-pt', '--patient', type=str, required=True,
                         help='Patient ID')
@@ -25,10 +38,25 @@ def init_parser():
 
 
 def str2bool(s):
+    """Convert a string to a boolean value.
+
+    Args:
+        s: String to convert (case-insensitive).
+
+    Returns:
+        bool: True if the string equals 'true' (case-insensitive).
+    """
     return s.lower() == 'true'
 
 
 def seq2seq_decoding():
+    """Run the Seq2Seq RNN training and evaluation pipeline.
+
+    Parses CLI arguments, builds the data module (patient-specific or
+    cross-patient aligned), instantiates a Seq2Seq GRU model, trains it
+    over multiple iterations with k-fold cross-validation, and saves
+    per-fold and aggregate accuracies to CSV and NumPy files.
+    """
 
     ##### Parse arguments #####
     parser = init_parser()
