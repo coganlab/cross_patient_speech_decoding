@@ -1,5 +1,7 @@
 # Shared latent representations of speech production for cross-patient speech decoding
 
+   [![DOI](https://zenodo.org/badge/608659371.svg)](https://doi.org/10.5281/zenodo.20531684)
+
 ![](figures/overview_fig.png)
 
 ## Overview
