@@ -1,11 +1,11 @@
 # Shared latent representations of speech production for cross-patient speech decoding
 
-   [![DOI](https://zenodo.org/badge/608659371.svg)](https://doi.org/10.5281/zenodo.20531684)
-
 ![](figures/overview_fig.png)
 
 ## Overview
 
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.20531684-blue.svg)](https://doi.org/10.5281/zenodo.20531684)
+  
 This repository contains code used in analyses and creation of figures for the paper "Shared latent representations of speech production for cross-patient speech decoding". 
 
 We use an approach based on canonical correlation analysis (CCA) to learn an alignment between latent neural representations of speech production recorded with micro-electrocorticography (μECoG) arrays from multiple patients. We show that patient-specific neural data can be aligned to a shared cross-patient latent space, enabling the training of cross-patient speech decoding models that outperform patient-specific models.
